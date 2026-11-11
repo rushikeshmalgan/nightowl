@@ -6,6 +6,11 @@ export type CommandGroup = 'Document' | 'View' | 'Audio' | 'Music' | 'Storage';
 export interface CommandDeps {
   ui: Pick<UiState, 'set' | 'toggle' | 'reset'>;
   tts: { supported: boolean; toggle(): void };
+  /** Documents in the library; each becomes an "Open ..." command. */
+  documents?: Array<{ id: string; name: string }>;
+  openDocument?(id: string): void;
+  /** Starts the confirmed "delete everything" flow. */
+  requestClear?(): void;
 }
 
 const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
@@ -16,8 +21,16 @@ const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
 ];
 
 /** The static command list for the palette. Later features append their own. */
-export function buildCommands({ ui, tts }: CommandDeps): Command[] {
+export function buildCommands({ ui, tts, documents = [], openDocument, requestClear }: CommandDeps): Command[] {
   const commands: Command[] = [
+    ...(openDocument
+      ? documents.map<Command>((doc) => ({
+          id: `open-${doc.id}`,
+          title: `Open ${doc.name}`,
+          group: 'Document',
+          run: () => openDocument(doc.id),
+        }))
+      : []),
     { id: 'library', title: 'Open library', group: 'Document', keywords: ['files', 'documents'], run: () => ui.set('libraryOpen', true) },
     ...THEME_COMMANDS.map<Command>((theme) => ({
       id: `theme-${theme.id}`,
@@ -35,6 +48,9 @@ export function buildCommands({ ui, tts }: CommandDeps): Command[] {
   ];
   if (tts.supported) {
     commands.push({ id: 'tts', title: 'Read aloud', group: 'Audio', hotkey: 's', keywords: ['speech', 'voice', 'narrate'], run: () => tts.toggle() });
+  }
+  if (requestClear) {
+    commands.push({ id: 'clear', title: 'Clear cache', group: 'Storage', keywords: ['delete', 'library', 'storage', 'remove'], run: () => requestClear() });
   }
   return commands;
 }
