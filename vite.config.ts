@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   test: {
     environment: 'jsdom',
+    // One jsdom per worker instead of one per file; files stay isolated.
+    pool: 'vmThreads',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     css: false,
