@@ -1,0 +1,96 @@
+/*
+ * Nocturne design tokens.
+ * Each theme sets the same five variables; Tailwind utilities (bg-canvas,
+ * text-ink, border-line, ...) read them through the @theme block below.
+ */
+
+:root,
+[data-theme='night'] {
+  --canvas: #090a0f;
+  --surface: #12141c;
+  --ink: #e2e8f0;
+  --muted: #64748b;
+  --accent: #f59e0b;
+  --active: #3a4034;
+  --line: rgb(255 255 255 / 0.05);
+}
+
+[data-theme='sepia'] {
+  --canvas: #1b1713;
+  --surface: #26211c;
+  --ink: #d6c7b2;
+  --muted: #8a7a66;
+  --accent: #e5a95d;
+  --active: #3a3229;
+  --line: rgb(255 240 220 / 0.07);
+}
+
+[data-theme='oled'] {
+  --canvas: #000000;
+  --surface: #0a0a0a;
+  --ink: #a0a0a0;
+  --muted: #5c5c5c;
+  --accent: #f59e0b;
+  --active: #1c1c1c;
+  --line: rgb(255 255 255 / 0.08);
+}
+
+[data-theme='crimson'] {
+  --canvas: #120505;
+  --surface: #1c0a0a;
+  --ink: #f87171;
+  --muted: #7f3a3a;
+  --accent: #ef4444;
+  --active: #3b1212;
+  --line: rgb(255 120 120 / 0.1);
+}
+
+@theme {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-active: var(--active);
+  --color-line: var(--line);
+
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --font-serif: 'Newsreader Variable', ui-serif, Georgia, serif;
+  --font-dyslexic: 'OpenDyslexic', 'Geist Variable', sans-serif;
+
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shared motion: specific properties only, never `transition: all`. */
+.motion-fade {
+  transition: opacity 200ms var(--ease-spring);
+}
+
+.motion-slide {
+  transition:
+    transform 200ms var(--ease-spring),
+    opacity 200ms var(--ease-spring);
+}
+
+.motion-color {
+  transition:
+    color 200ms var(--ease-spring),
+    background-color 200ms var(--ease-spring),
+    border-color 200ms var(--ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade,
+  .motion-slide,
+  .motion-color {
+    transition: none;
+  }
+}
