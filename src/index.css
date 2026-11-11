@@ -3,6 +3,7 @@
 @import '@fontsource-variable/geist-mono';
 @import '@fontsource-variable/newsreader';
 @import '@fontsource/opendyslexic';
+@import './design/tokens.css';
 
 html,
 body,
