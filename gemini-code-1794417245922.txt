@@ -1,0 +1,26 @@
+Goal: Refactor the UI design system of Nocturne Reader to strip away obvious AI design tropes (generic glow effects, centered hero cards, uniform rounded containers, bright gradient overlays) and replace them with a sleek, editorial, utility-focused dark mode interface inspired by Linear, Raycast, and Arc Browser.
+
+1. Visual Architecture & Layout Overhaul
+- Collapsible Utility Dock / Rail: Replace bulky floating toolbars with a streamlined 48px left/bottom tool rail with clear hotkeys (Cmd+B for Bionic Reading, Cmd+K for Command Palette, Cmd+M for Audio).
+- Grid System: Use a tight 4px/8px grid system with clear visual hierarchy, razor-thin subtle borders (border-white/5 or border-neutral-800), and zero heavy drop-shadows.
+- Asymmetric Workspace: Shift the primary canvas to take up 80%+ of the viewport width. Place controls in a minimalist side panel that slides out on hover or shortcut, keeping the focus entirely on reading content.
+- Focus State & Peripheral Dimming: Implement a true "distraction-free" ambient mode where all UI panels fade out completely to opacity: 0 after 3 seconds of inactivity or active reading.
+
+2. Typography & Color Palette Refinement
+- Typography Stack: Remove standard system sans fonts. Implement high-quality variable fonts:
+  * UI & Interface: Geist Sans, Inter Display, or SF Pro Display.
+  * Document Body: Geist Mono, JetBrains Mono, or iA Writer Mono for code/markdown, and Newsreader or Literata for serif reading mode.
+- Muted Dark Palette: Replace pure pitch black (#000000) and default gray gradients with engineered neutral dark tones:
+  * Base Canvas: #090A0F or #0C0D12
+  * Card Surfaces: #12141C
+  * Text: High contrast #E2E8F0 for body, muted #64748B for secondary meta text.
+  * Accent Colors: Ditch generic neon cyan/purple glows. Use muted amber/warm gold (#F59E0B) for night warming controls and deep olive/slate for active states.
+
+3. Micro-Interactions & Polish
+- Custom Control Components: Replace native range sliders with custom tactile scrubbers (showing precise numeric readouts like 4500K temperature or 1.15x scroll speed).
+- Audio Visualizer Realism: Replace blocky bars with a smooth, minimalist waveform canvas or a single glowing LED-style pulse indicator next to the sound selector.
+- Smooth State Transitions: Add subtle CSS transition spring physics (transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1)) on panel toggles, theme switches, and layer previews.
+- Keyboard-First Navigation: Add a Command Palette (Cmd + K) for instant file opening, preset selection, and parameter toggling without touching the mouse.
+
+Deliverable Format:
+Provide updated Tailwind CSS theme config / custom CSS modules alongside refactored React visual components that replace generic cards and buttons with custom, high-density UI elements.

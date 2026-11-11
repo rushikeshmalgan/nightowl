@@ -1,0 +1,26 @@
+Goal: Transform the frontend React component into a production-ready, full-stack application with real live user counts, persistent document caching, real-time multiplayer presence, and robust audio asset handling.
+
+1. Real-Time Active Users Counter (WebSockets / Firebase)
+Replace the simulated random user counter with real active connection tracking.
+- Option A (Firebase / Supabase): Use Supabase Realtime or Firebase Realtime Database presence channels. Track connected clients via onConnect and onDisconnect listeners.
+- Option B (WebSockets / Socket.io): Express + Socket.io backend to maintain a live connection count (io.engine.clientsCount) and broadcast presence_update events every 5 seconds.
+- UI Requirements: Display actual online user count, room breakdown (users viewing PDFs vs PSDs), and fallback smoothly to local offline mode if connection drops.
+
+2. Production Storage & Local Caching Engine (IndexedDB + Service Worker)
+Shift from temporary state storage to persistent offline-first local caching.
+- IndexedDB Integration: Use idb or dexie.js to store user-uploaded files, layer metadata, PDF thumbnails, and reading progress (last scroll position, active bookmarks, highlight notes).
+- PWA & Offline Cache: Configure a Service Worker using Workbox to cache app assets, ambient audio files, and web fonts. App must load instantly and remain 100% functional without internet connectivity.
+- Cache Eviction & Quota Management: Expose storage metrics using navigator.storage.estimate(). Add a clear button and auto-eviction policy (LRU) when usage exceeds 500 MB.
+
+3. Audio Engine Optimization
+Elevate the ambient sound system for production stability.
+- Hybrid Audio Pipeline: Keep the synthesized Web Audio API nodes as fallback, but integrate streaming royalty-free ambient audio tracks (Lo-Fi, Rain, Pink Noise) hosted on a CDN (e.g., AWS S3 / Cloudflare R2).
+- Background Playback: Web Audio API context handling with auto-resume on touch/click (AudioContext.resume()). Store user audio preferences in IndexedDB.
+
+4. File Processing & Layer Parsing (PDF / PSD)
+Upgrade mock file readers to actual client-side parsing libraries.
+- PDF Rendering: Integrate pdfjs-dist to render actual PDF pages to standard dynamic canvas components with zoom and text selection.
+- PSD Layer Parsing: Integrate @webtoon/psd or ag-psd to extract actual canvas layers, folder hierarchy, and layer visibilities from uploaded .psd files.
+
+Deliverable Format:
+Provide the architecture setup, required npm packages (npm install @supabase/supabase-js dexie pdfjs-dist ag-psd), clean modular hooks (usePresence.ts, useAudioEngine.ts, useLocalCache.ts), and updated React code.
