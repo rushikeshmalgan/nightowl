@@ -9,6 +9,7 @@ vi.mock('./lib/library', async () => (await import('./test/fakes')).fakeLibraryM
 vi.mock('./lib/progress', async () => (await import('./test/fakes')).fakeProgressModule);
 vi.mock('./lib/prefs', async () => (await import('./test/fakes')).fakePrefsModule);
 vi.mock('./lib/text', async () => (await import('./test/fakes')).fakeTextModule);
+vi.mock('./lib/highlightStore', async () => (await import('./test/fakes')).fakeHighlightStoreModule);
 
 function press(init: KeyboardEventInit) {
   fireEvent.keyDown(document.body, init);
@@ -200,6 +201,23 @@ describe('App library', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete everything' }));
     expect(await screen.findByText(/Nothing is open/)).toBeInTheDocument();
     expect(state.docs).toHaveLength(0);
+  });
+
+  it('highlights a selection and lists it in the library', async () => {
+    await renderApp();
+    const article = screen.getByRole('article');
+    const textNode = article.querySelector('[data-start]')?.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 13);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    fireEvent.mouseUp(article);
+    fireEvent.click(screen.getByRole('button', { name: 'Highlight' }));
+
+    expect((await screen.findByText('NIGHT READING', { selector: 'mark' })).tagName).toBe('MARK');
+    const library = await openLibrary();
+    expect(await within(library).findByRole('button', { name: 'Go to highlight: NIGHT READING' })).toBeInTheDocument();
   });
 
   it('adds a bookmark from the status line', async () => {

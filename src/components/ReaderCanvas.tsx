@@ -4,6 +4,7 @@ import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { useReadingProgress } from '../hooks/useReadingProgress';
 import { isCodeLike } from '../lib/fileTypes';
+import type { TextRange } from '../lib/highlights';
 import { readText } from '../lib/text';
 import { useUi } from '../store/ui';
 import type { DocRecord } from '../types';
@@ -19,17 +20,22 @@ export interface ReaderPosition {
 
 export interface ReaderHandle {
   goToPage(page: number): void;
+  /** Scrolls a text highlight into view, given its start offset. */
+  goToHighlight(start: number): void;
 }
 
 export interface ReaderCanvasProps {
   doc: DocRecord | null;
+  /** Saved highlights for the open text document. */
+  highlights?: TextRange[];
+  onHighlight?(range: TextRange): void;
   /** The plain text of the open document, for reading aloud. Empty when none. */
   onText?(text: string): void;
   onPosition?(position: ReaderPosition): void;
   ref?: Ref<ReaderHandle>;
 }
 
-export function ReaderCanvas({ doc, onText, onPosition, ref }: ReaderCanvasProps) {
+export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition, ref }: ReaderCanvasProps) {
   const bionic = useUi((s) => s.bionic);
   const dyslexic = useUi((s) => s.dyslexic);
   const fontSize = useUi((s) => s.fontSize);
@@ -108,6 +114,17 @@ export function ReaderCanvas({ doc, onText, onPosition, ref }: ReaderCanvasProps
       if (!scroller) return;
       scroller.scrollTop = Math.max(0, page - 1) * (scroller.clientHeight || 0);
     },
+    goToHighlight(start: number) {
+      const marks = scrollRef.current?.querySelectorAll<HTMLElement>('mark[data-start]') ?? [];
+      for (const mark of marks) {
+        const markStart = Number(mark.dataset.start);
+        const markEnd = markStart + (mark.textContent?.length ?? 0);
+        if (start >= markStart && start < markEnd) {
+          mark.scrollIntoView?.({ block: 'center' });
+          return;
+        }
+      }
+    },
   }));
 
   return (
@@ -146,6 +163,8 @@ export function ReaderCanvas({ doc, onText, onPosition, ref }: ReaderCanvasProps
               dyslexic={dyslexic}
               fontSize={Math.round((fontSize * zoom) / 100)}
               lineHeight={lineHeight}
+              highlights={highlights}
+              onHighlight={onHighlight}
             />
           ) : null}
         </div>

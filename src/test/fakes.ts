@@ -8,7 +8,7 @@
  */
 import { SEED_DOCS } from '../data/seeds';
 import { detectDocType } from '../lib/fileTypes';
-import type { BookmarkRecord, DocMeta, DocRecord, ProgressRecord } from '../types';
+import type { BookmarkRecord, DocMeta, DocRecord, HighlightRecord, ProgressRecord } from '../types';
 
 const texts = new WeakMap<Blob, string>();
 let clock = 1000;
@@ -16,6 +16,7 @@ let clock = 1000;
 export const state = {
   docs: [] as DocRecord[],
   bookmarks: [] as BookmarkRecord[],
+  highlights: [] as HighlightRecord[],
   progress: new Map<string, ProgressRecord>(),
   prefs: new Map<string, unknown>(),
 };
@@ -36,6 +37,7 @@ export function resetFakes(): void {
     doc.lastOpenedAt = 500 - index;
   });
   state.bookmarks = [];
+  state.highlights = [];
   state.progress.clear();
   state.prefs.clear();
 }
@@ -117,6 +119,23 @@ export const fakeProgressModule = {
     state.bookmarks.filter((b) => !docId || b.docId === docId).sort((a, b) => b.createdAt - a.createdAt),
   deleteBookmark: async (_db: unknown, id: string) => {
     state.bookmarks = state.bookmarks.filter((b) => b.id !== id);
+  },
+};
+
+export const fakeHighlightStoreModule = {
+  addHighlight: async (_db: unknown, highlight: { docId: string; start: number; end: number; note: string }) => {
+    clock += 1;
+    const record: HighlightRecord = { id: `hl-${clock}`, createdAt: clock, ...highlight };
+    state.highlights.push(record);
+    return record;
+  },
+  listHighlights: async (_db: unknown, docId: string) =>
+    state.highlights.filter((h) => h.docId === docId).sort((a, b) => a.start - b.start),
+  updateHighlightNote: async (_db: unknown, id: string, note: string) => {
+    state.highlights = state.highlights.map((h) => (h.id === id ? { ...h, note } : h));
+  },
+  deleteHighlight: async (_db: unknown, id: string) => {
+    state.highlights = state.highlights.filter((h) => h.id !== id);
   },
 };
 

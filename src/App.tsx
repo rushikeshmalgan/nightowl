@@ -4,6 +4,7 @@ import { Chrome } from './components/Chrome';
 import { CommandPalette } from './components/CommandPalette';
 import { DropOverlay } from './components/DropOverlay';
 import { LibraryPanel } from './components/LibraryPanel';
+import type { HighlightItem } from './components/LibraryPanel';
 import { Rail } from './components/Rail';
 import type { RailItem } from './components/Rail';
 import { ReaderCanvas } from './components/ReaderCanvas';
@@ -12,6 +13,7 @@ import { StatusLine } from './components/StatusLine';
 import { TuningPanel } from './components/TuningPanel';
 import { WarmthOverlay } from './components/WarmthOverlay';
 import { useBookmarks } from './hooks/useBookmarks';
+import { useHighlights } from './hooks/useHighlights';
 import { useHotkeys } from './hooks/useHotkeys';
 import { useIdleFade } from './hooks/useIdleFade';
 import { useLocalCache } from './hooks/useLocalCache';
@@ -37,6 +39,15 @@ export default function App() {
 
   const readerRef = useRef<ReaderHandle>(null);
   const bookmarks = useBookmarks(doc?.id ?? null);
+  const highlights = useHighlights(doc?.type === 'text' ? doc.id : null);
+  const highlightItems = useMemo<HighlightItem[]>(
+    () =>
+      highlights.highlights.map((highlight) => ({
+        ...highlight,
+        excerpt: docText.slice(highlight.start, highlight.end).replace(/\s+/g, ' ').trim().slice(0, 80),
+      })),
+    [highlights.highlights, docText],
+  );
   const tts = useTts(docText, ui.speechRate);
 
   const { open: openFromCache, importFile, remove: removeFromCache, clearAll, refresh } = cache;
@@ -220,7 +231,14 @@ export default function App() {
 
   return (
     <div role="application" aria-label="Nocturne Reader" className="relative h-full overflow-hidden bg-canvas text-ink">
-      <ReaderCanvas ref={readerRef} doc={doc} onText={setDocText} onPosition={setPosition} />
+      <ReaderCanvas
+        ref={readerRef}
+        doc={doc}
+        highlights={highlights.highlights}
+        onHighlight={(range) => void highlights.add(range)}
+        onText={setDocText}
+        onPosition={setPosition}
+      />
 
       <Chrome idle={idle}>
         <Rail items={railItems} />
@@ -262,6 +280,13 @@ export default function App() {
             onClearAll={() => void clearEverything()}
             onJumpToBookmark={jumpToBookmark}
             onRemoveBookmark={(id) => void bookmarks.remove(id)}
+            highlights={highlightItems}
+            onJumpToHighlight={(highlight) => {
+              readerRef.current?.goToHighlight(highlight.start);
+              useUi.getState().set('libraryOpen', false);
+            }}
+            onHighlightNote={(id, note) => void highlights.setNote(id, note)}
+            onRemoveHighlight={(id) => void highlights.remove(id)}
           />
         ) : null}
 
