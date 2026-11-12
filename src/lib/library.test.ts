@@ -199,6 +199,11 @@ describe('seedIfEmpty', () => {
     expect(docs.every((doc) => doc.type === 'text')).toBe(true);
   });
 
+  it('adds the seeds once when two callers race (React StrictMode, two tabs)', async () => {
+    await Promise.all([seedIfEmpty(db), seedIfEmpty(db)]);
+    expect(await db.documents.count()).toBe(SEED_DOCS.length);
+  });
+
   it('does not bring the seeds back after the user deletes them', async () => {
     await seedIfEmpty(db);
     await clearAll(db, { includeTracks: false });

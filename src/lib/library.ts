@@ -188,25 +188,29 @@ export async function requestPersistence(): Promise<boolean> {
  * them coming back after the user deletes them.
  */
 export async function seedIfEmpty(db: NocturneDB): Promise<void> {
-  const flag = await db.prefs.get(SEEDED_PREF);
-  if (flag?.value === true) return;
+  // One transaction for check-and-insert: a second caller (React StrictMode's
+  // double effect, or another tab) waits and then sees the flag.
+  await db.transaction('rw', [db.documents, db.prefs], async () => {
+    const flag = await db.prefs.get(SEEDED_PREF);
+    if (flag?.value === true) return;
 
-  if ((await db.documents.count()) === 0) {
-    const now = Date.now();
-    const records: DocRecord[] = SEED_DOCS.map((seed, index) => {
-      const blob = new Blob([seed.text], { type: 'text/plain' });
-      return {
-        id: crypto.randomUUID(),
-        name: seed.name,
-        type: 'text',
-        size: blob.size,
-        blob,
-        addedAt: now,
-        // Keep the seeds in their listed order, first one most recent.
-        lastOpenedAt: now - index,
-      };
-    });
-    await db.documents.bulkAdd(records);
-  }
-  await db.prefs.put({ key: SEEDED_PREF, value: true });
+    if ((await db.documents.count()) === 0) {
+      const now = Date.now();
+      const records: DocRecord[] = SEED_DOCS.map((seed, index) => {
+        const blob = new Blob([seed.text], { type: 'text/plain' });
+        return {
+          id: crypto.randomUUID(),
+          name: seed.name,
+          type: 'text',
+          size: blob.size,
+          blob,
+          addedAt: now,
+          // Keep the seeds in their listed order, first one most recent.
+          lastOpenedAt: now - index,
+        };
+      });
+      await db.documents.bulkAdd(records);
+    }
+    await db.prefs.put({ key: SEEDED_PREF, value: true });
+  });
 }
