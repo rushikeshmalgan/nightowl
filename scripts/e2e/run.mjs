@@ -84,6 +84,10 @@ const groups = {
       const title = await page.getByTestId('status-title').innerText();
       expect(title.includes('Sleep & Night Ergonomics'), `status title was "${title}"`);
     });
+    await check('shell', 'the reader count shows local mode without Supabase settings', async () => {
+      const text = await page.getByTestId('presence').innerText();
+      expect(text.includes('Local mode'), `badge said "${text}"`);
+    });
     await check('shell', 'chrome fades after 3 s of no input and wakes on movement', async () => {
       await page.mouse.move(600, 400);
       await page.waitForTimeout(3500);

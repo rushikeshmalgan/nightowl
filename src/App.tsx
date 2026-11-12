@@ -6,6 +6,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { DropOverlay } from './components/DropOverlay';
 import { LedPulse } from './components/LedPulse';
 import { LibraryPanel } from './components/LibraryPanel';
+import { PresenceBadge } from './components/PresenceBadge';
 import { MusicDock } from './components/MusicDock';
 import type { HighlightItem } from './components/LibraryPanel';
 import { Rail } from './components/Rail';
@@ -27,6 +28,7 @@ import { useLocalCache } from './hooks/useLocalCache';
 import { useMusicPrefs } from './hooks/useMusicPrefs';
 import { useMusicSource } from './hooks/useMusicSource';
 import { useOnline } from './hooks/useOnline';
+import { usePresence } from './hooks/usePresence';
 import { usePrefsSync } from './hooks/usePrefsSync';
 import { useSleepTimer } from './hooks/useSleepTimer';
 import { useTts } from './hooks/useTts';
@@ -74,6 +76,8 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   const music = useMusicSource(players.adapters);
   const musicPrefs = useMusicPrefs();
   const online = useOnline();
+  // Shares only the kind of document open, never its name.
+  const presence = usePresence(doc ? doc.type : 'none');
   const [tracks, setTracks] = useState<TrackRecord[]>([]);
   const [musicItem, setMusicItem] = useState<PlaylistItem | null>(null);
 
@@ -327,6 +331,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       <Chrome idle={idle}>
         <Rail items={railItems} />
         <StatusLine title={doc?.name ?? 'No document'} flags={flags}>
+          <PresenceBadge {...presence} />
           {audio.state.playing ? <LedPulse level={level} source={audio.state.source} /> : null}
           {doc && position ? (
             <span className="font-mono text-[11px] tabular-nums">

@@ -54,6 +54,11 @@ describe('App shell', () => {
     expect(screen.getByRole('application', { name: 'NightOwl Reader' })).toBeInTheDocument();
   });
 
+  it('shows local mode in the status line when Supabase is not configured', async () => {
+    await renderApp();
+    expect(within(screen.getByRole('status', { name: 'Document status' })).getByTestId('presence')).toHaveTextContent('Local mode');
+  });
+
   it('has a 48px tool rail', async () => {
     await renderApp();
     expect(screen.getByRole('navigation', { name: 'Tools' })).toHaveClass('w-12');
