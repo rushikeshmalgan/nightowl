@@ -1,5 +1,5 @@
 /*
- * Nocturne design tokens.
+ * NightOwl design tokens.
  * Each theme sets the same five variables; Tailwind utilities (bg-canvas,
  * text-ink, border-line, ...) read them through the @theme block below.
  */

@@ -1,14 +1,27 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { useUi } from './store/ui';
 import { resetFakes, state } from './test/fakes';
+import { makeFakeAdapters } from './test/fakeAdapter';
+import type { DefaultAdapters } from './lib/music/defaultAdapters';
 
 vi.mock('./lib/db', async () => (await import('./test/fakes')).fakeDbModule);
 vi.mock('./lib/library', async () => (await import('./test/fakes')).fakeLibraryModule);
 vi.mock('./lib/progress', async () => (await import('./test/fakes')).fakeProgressModule);
 vi.mock('./lib/prefs', async () => (await import('./test/fakes')).fakePrefsModule);
 vi.mock('./lib/text', async () => (await import('./test/fakes')).fakeTextModule);
+vi.mock('./lib/importPipeline', async () => (await import('./test/fakes')).fakeImportPipelineModule);
+vi.mock('./lib/pdf', async () => (await import('./test/fakes')).fakePdfModule);
+// A real engine on a fake AudioContext, shared by every test in this file.
+vi.mock('./lib/audio/instance', async () => {
+  const { AudioEngine } = await import('./lib/audio/engine');
+  const { FakeAudioContext, asContext } = await import('./test/fakeAudio');
+  const engine = new AudioEngine({ createContext: () => asContext(new FakeAudioContext()) });
+  return { getAudioEngine: () => engine };
+});
+vi.mock('./lib/tracks', () => ({ listTracks: async () => [] }));
+vi.mock('./lib/highlightStore', async () => (await import('./test/fakes')).fakeHighlightStoreModule);
 
 function press(init: KeyboardEventInit) {
   fireEvent.keyDown(document.body, init);
@@ -38,7 +51,12 @@ describe('App shell', () => {
 
   it('renders the application root', async () => {
     await renderApp();
-    expect(screen.getByRole('application', { name: 'Nocturne Reader' })).toBeInTheDocument();
+    expect(screen.getByRole('application', { name: 'NightOwl Reader' })).toBeInTheDocument();
+  });
+
+  it('shows local mode in the status line when Supabase is not configured', async () => {
+    await renderApp();
+    expect(within(screen.getByRole('status', { name: 'Document status' })).getByTestId('presence')).toHaveTextContent('Local mode');
   });
 
   it('has a 48px tool rail', async () => {
@@ -142,9 +160,9 @@ describe('App library', () => {
   it('lists the library and opens another document', async () => {
     await renderApp();
     const library = await openLibrary();
-    fireEvent.click(within(library).getByRole('button', { name: 'Open Nocturne Engine Specs.txt' }));
-    expect(await screen.findByText(/NOCTURNE READER ENGINE/)).toBeInTheDocument();
-    expect(screen.getByTestId('status-title')).toHaveTextContent('Nocturne Engine Specs.txt');
+    fireEvent.click(within(library).getByRole('button', { name: 'Open NightOwl Engine Specs.txt' }));
+    expect(await screen.findByText(/NIGHTOWL READER ENGINE/)).toBeInTheDocument();
+    expect(screen.getByTestId('status-title')).toHaveTextContent('NightOwl Engine Specs.txt');
   });
 
   it('imports a chosen file and opens it', async () => {
@@ -169,8 +187,8 @@ describe('App library', () => {
     await renderApp();
     const library = await openLibrary();
     // Another tab removed it after this list was drawn.
-    state.docs = state.docs.filter((doc) => doc.name !== 'Nocturne Engine Specs.txt');
-    fireEvent.click(within(library).getByRole('button', { name: 'Open Nocturne Engine Specs.txt' }));
+    state.docs = state.docs.filter((doc) => doc.name !== 'NightOwl Engine Specs.txt');
+    fireEvent.click(within(library).getByRole('button', { name: 'Open NightOwl Engine Specs.txt' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('This document is no longer in the library.');
   });
 
@@ -178,7 +196,7 @@ describe('App library', () => {
     await renderApp();
     const library = await openLibrary();
     fireEvent.click(within(library).getByRole('button', { name: 'Remove Sleep & Night Ergonomics.md' }));
-    expect(await screen.findByText(/NOCTURNE READER ENGINE/)).toBeInTheDocument();
+    expect(await screen.findByText(/NIGHTOWL READER ENGINE/)).toBeInTheDocument();
   });
 
   it('offers each document in the palette', async () => {
@@ -187,7 +205,7 @@ describe('App library', () => {
     press({ key: 'k', ctrlKey: true });
     await user.type(screen.getByRole('combobox'), 'engine specs');
     await user.keyboard('{Enter}');
-    expect(await screen.findByText(/NOCTURNE READER ENGINE/)).toBeInTheDocument();
+    expect(await screen.findByText(/NIGHTOWL READER ENGINE/)).toBeInTheDocument();
   });
 
   it('clears the library after confirmation from the palette', async () => {
@@ -202,10 +220,113 @@ describe('App library', () => {
     expect(state.docs).toHaveLength(0);
   });
 
+  it('highlights a selection and lists it in the library', async () => {
+    await renderApp();
+    const article = screen.getByRole('article');
+    const textNode = article.querySelector('[data-start]')?.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 13);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    fireEvent.mouseUp(article);
+    fireEvent.click(screen.getByRole('button', { name: 'Highlight' }));
+
+    expect((await screen.findByText('NIGHT READING', { selector: 'mark' })).tagName).toBe('MARK');
+    const library = await openLibrary();
+    expect(await within(library).findByRole('button', { name: 'Go to highlight: NIGHT READING' })).toBeInTheDocument();
+  });
+
+  it('opens the ambient sound panel from the rail', async () => {
+    await renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Ambient sound' }));
+    const panel = await screen.findByRole('region', { name: 'Ambient sound' });
+    expect(within(panel).getByRole('button', { name: 'Rain' })).toBeInTheDocument();
+  });
+
+  it('starts and stops ambient sound with the A key', async () => {
+    await renderApp();
+    press({ key: 'a' });
+    expect(await screen.findByText('Sound')).toBeInTheDocument();
+    expect(screen.getByTestId('led')).toHaveAttribute('data-source', 'synth');
+    press({ key: 'a' });
+    await waitFor(() => expect(screen.queryByText('Sound')).not.toBeInTheDocument());
+  });
+
+  it('starts and stops ambient sound with Ctrl+M', async () => {
+    await renderApp();
+    press({ key: 'm', ctrlKey: true });
+    expect(await screen.findByText('Sound')).toBeInTheDocument();
+    press({ key: 'm', ctrlKey: true });
+    await waitFor(() => expect(screen.queryByText('Sound')).not.toBeInTheDocument());
+  });
+
   it('adds a bookmark from the status line', async () => {
     await renderApp();
     fireEvent.click(screen.getByRole('button', { name: 'Add bookmark' }));
     const library = await openLibrary();
     expect(await within(library).findByRole('button', { name: /Go to bookmark Page 1, page 1/ })).toBeInTheDocument();
+  });
+});
+
+describe('App music dock', () => {
+  beforeEach(() => {
+    resetFakes();
+    act(() => useUi.getState().reset());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function fakePlayers(): DefaultAdapters & { fakes: ReturnType<typeof makeFakeAdapters> } {
+    const fakes = makeFakeAdapters();
+    const youtube = Object.assign(fakes.youtube, { mount: vi.fn() });
+    const spotify = Object.assign(fakes.spotify, { mount: vi.fn() });
+    return { adapters: fakes, youtube, spotify, fakes } as unknown as DefaultAdapters & { fakes: ReturnType<typeof makeFakeAdapters> };
+  }
+
+  it('shows the music dock', async () => {
+    render(<App adapters={fakePlayers()} />);
+    await screen.findByRole('article');
+    expect(screen.getByRole('region', { name: 'Music' })).toHaveClass('h-14');
+  });
+
+  it('plays and pauses the active source with Ctrl+M', async () => {
+    const players = fakePlayers();
+    render(<App adapters={players} />);
+    await screen.findByRole('article');
+    press({ key: 'm', ctrlKey: true });
+    await waitFor(() => expect(players.fakes.noise.play).toHaveBeenCalledTimes(1));
+    press({ key: 'm', ctrlKey: true });
+    await waitFor(() => expect(players.fakes.noise.pause).toHaveBeenCalled());
+  });
+
+  it('switches to YouTube from the palette', async () => {
+    const user = userEvent.setup();
+    const players = fakePlayers();
+    render(<App adapters={players} />);
+    await screen.findByRole('article');
+    press({ key: 'k', ctrlKey: true });
+    await user.type(screen.getByRole('combobox'), 'switch to youtube');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'YouTube', pressed: true })).toBeInTheDocument());
+  });
+
+  it('keeps the YouTube player visible while the rest of the chrome fades', async () => {
+    const players = fakePlayers();
+    render(<App adapters={players} />);
+    await screen.findByRole('article');
+    fireEvent.click(screen.getByRole('button', { name: 'YouTube' }));
+    await waitFor(() => expect(screen.getByTestId('yt-tile')).toBeVisible());
+    vi.useFakeTimers();
+    act(() => window.dispatchEvent(new Event('pointermove')));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(screen.getByTestId('chrome').style.opacity).toBe('0');
+    const tile = screen.getByTestId('yt-tile');
+    expect(tile.closest('[data-testid="chrome"]')).toBeNull();
+    expect(tile).toBeVisible();
   });
 });

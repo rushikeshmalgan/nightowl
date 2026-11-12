@@ -4,6 +4,7 @@
 @import '@fontsource-variable/newsreader';
 @import '@fontsource/opendyslexic';
 @import './design/tokens.css';
+@import './design/pdf.css';
 
 html,
 body,

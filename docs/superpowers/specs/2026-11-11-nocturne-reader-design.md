@@ -1,12 +1,12 @@
-# Nocturne Reader — Production Rebuild + UI Redesign (Design Spec)
+# NightOwl Reader — Production Rebuild + UI Redesign (Design Spec)
 
 Date: 2026-11-11
 Status: Draft for review
-Sources: `gemini-code-1794417242771.txt` (full-stack/production prompt), `gemini-code-1794417245922.txt` (UI redesign prompt), `nocturne_reader_night_document_platform.tsx` (current prototype). Added 2026-11-11 after the first draft: a music-streaming prompt pasted in chat, and the ad-free approach observed at deluxsalon.in (a YouTube IFrame API radio that carries no ads of its own).
+Sources: `gemini-code-1794417242771.txt` (full-stack/production prompt), `gemini-code-1794417245922.txt` (UI redesign prompt), `nightowl_reader_night_document_platform.tsx` (current prototype). Added 2026-11-11 after the first draft: a music-streaming prompt pasted in chat, and the ad-free approach observed at deluxsalon.in (a YouTube IFrame API radio that carries no ads of its own).
 
 ## 1. Intent
 
-Turn the single-file prototype (`nocturne_reader_night_document_platform.tsx`, 1,088 lines, simulated data, `localStorage` storage, fake file parsing) into a real, offline-first night-reading web app, and replace its generic "AI dashboard" look with a quiet, editorial, utility-focused interface (Linear / Raycast / Arc feel).
+Turn the single-file prototype (`nightowl_reader_night_document_platform.tsx`, 1,088 lines, simulated data, `localStorage` storage, fake file parsing) into a real, offline-first night-reading web app, and replace its generic "AI dashboard" look with a quiet, editorial, utility-focused interface (Linear / Raycast / Arc feel).
 
 **Success criteria**
 - The live reader count and room breakdown come from real connections, and the app degrades to a clean local mode when presence is unavailable.
@@ -97,7 +97,7 @@ Environment variables (all optional): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_K
 - Uploaded `tracks` are never auto-evicted, because the user added them deliberately. They count toward the usage figure, and the storage panel shows documents and tracks separately. The 500 MB LRU limit applies to documents.
 - On first run, request `navigator.storage.persist()`.
 - On `QuotaExceededError` during a write: run eviction once, retry once, then surface an error.
-- First run seeds two text documents derived from the prototype's "Sleep & Night Ergonomics" and "Nocturne Engine Specs" content. The prototype's fake PSD sample is dropped.
+- First run seeds two text documents derived from the prototype's "Sleep & Night Ergonomics" and "NightOwl Engine Specs" content. The prototype's fake PSD sample is dropped.
 
 **Accepted file types:** `.pdf`, `.psd`, `.txt`, `.md`, `.json`, `.csv`. The prototype's `.doc/.docx/.png/.jpg` are dropped because nothing parses them. Music upload (section 7.7) separately accepts `.mp3` and `.aac`.
 

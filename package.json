@@ -1,5 +1,5 @@
 {
-  "name": "nocturne-reader",
+  "name": "nightowl-reader",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,7 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "predev": "node scripts/copy-pdf-assets.mjs",
+    "prebuild": "node scripts/copy-pdf-assets.mjs",
+    "e2e": "node scripts/e2e/run.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -36,6 +39,7 @@
     "@vitejs/plugin-react": "^6.3.0",
     "fake-indexeddb": "^6.2.8",
     "jsdom": "^31.0.0",
+    "playwright-core": "^1.65.0",
     "tailwindcss": "^4.3.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",

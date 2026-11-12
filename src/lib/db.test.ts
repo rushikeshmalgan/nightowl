@@ -3,14 +3,14 @@ import 'fake-indexeddb/auto';
 import { createDb, db } from './db';
 import { getPref, setPref } from './prefs';
 
-describe('NocturneDB', () => {
+describe('NightOwlDB', () => {
   it('has the seven tables', () => {
     const names = db.tables.map((table) => table.name).sort();
     expect(names).toEqual(['bookmarks', 'documents', 'highlights', 'prefs', 'progress', 'thumbnails', 'tracks']);
   });
 
   it('round-trips a document blob', async () => {
-    const local = createDb('nocturne-test-blob');
+    const local = createDb('nightowl-test-blob');
     const blob = new Blob(['hello night'], { type: 'text/plain' });
     await local.documents.add({
       id: 'a',
@@ -28,7 +28,7 @@ describe('NocturneDB', () => {
   });
 
   it('keys thumbnails by document and page', async () => {
-    const local = createDb('nocturne-test-thumbs');
+    const local = createDb('nightowl-test-thumbs');
     await local.thumbnails.put({ docId: 'a', page: 1, blob: new Blob(['x']) });
     await local.thumbnails.put({ docId: 'a', page: 2, blob: new Blob(['yy']) });
     await local.thumbnails.put({ docId: 'a', page: 1, blob: new Blob(['zzz']) });
@@ -38,7 +38,7 @@ describe('NocturneDB', () => {
   });
 
   it('can list documents by lastOpenedAt', async () => {
-    const local = createDb('nocturne-test-index');
+    const local = createDb('nightowl-test-index');
     const base = { type: 'text' as const, size: 1, blob: new Blob(['x']), addedAt: 0 };
     await local.documents.bulkAdd([
       { ...base, id: 'old', name: 'old', lastOpenedAt: 10 },

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { db } from '../lib/db';
+import { importFileToLibrary } from '../lib/importPipeline';
 import {
   clearAll as clearLibrary,
   deleteDocument,
   getUsage,
-  importDocument,
   listDocuments,
   openDocument,
   seedIfEmpty,
@@ -21,7 +21,8 @@ export interface LocalCache {
   documents: DocMeta[];
   usage: Usage;
   overLimit: boolean;
-  importFile(file: File, opts?: { thumbnail?: Blob }): Promise<ImportOutcome>;
+  /** Validates the file, then stores it. */
+  importFile(file: File): Promise<ImportOutcome>;
   open(id: string): Promise<DocRecord | null>;
   remove(id: string): Promise<void>;
   clearAll(includeTracks: boolean): Promise<void>;
@@ -63,8 +64,8 @@ export function useLocalCache(): LocalCache {
   }, [refresh]);
 
   const importFile = useCallback(
-    async (file: File, opts: { thumbnail?: Blob } = {}): Promise<ImportOutcome> => {
-      const result = await importDocument(db, file, opts);
+    async (file: File): Promise<ImportOutcome> => {
+      const result = await importFileToLibrary(db, file);
       if (!result.ok) return result;
       await refresh();
       setOverLimit(result.overLimit);

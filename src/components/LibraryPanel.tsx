@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ACCEPT_ATTR } from '../lib/fileTypes';
 import { formatBytes } from '../lib/format';
 import type { Usage } from '../lib/library';
-import type { BookmarkRecord, DocMeta, DocType } from '../types';
+import type { BookmarkRecord, DocMeta, DocType, HighlightRecord } from '../types';
 import { StoragePanel } from './StoragePanel';
 
 export interface LibraryPanelProps {
@@ -22,6 +22,68 @@ export interface LibraryPanelProps {
   onClearAll(): void;
   onJumpToBookmark(bookmark: BookmarkRecord): void;
   onRemoveBookmark(id: string): void;
+  /** Highlights of the open document, each with the text it covers. */
+  highlights?: HighlightItem[];
+  onJumpToHighlight?(highlight: HighlightItem): void;
+  onHighlightNote?(id: string, note: string): void;
+  onRemoveHighlight?(id: string): void;
+}
+
+export type HighlightItem = HighlightRecord & { excerpt: string };
+
+function HighlightRow({
+  highlight,
+  onJump,
+  onNote,
+  onRemove,
+}: {
+  highlight: HighlightItem;
+  onJump?(highlight: HighlightItem): void;
+  onNote?(id: string, note: string): void;
+  onRemove?(id: string): void;
+}) {
+  const [draft, setDraft] = useState(highlight.note);
+
+  useEffect(() => {
+    setDraft(highlight.note);
+  }, [highlight.note]);
+
+  return (
+    <li className="flex flex-col gap-1 px-2 py-1.5">
+      <div className="flex items-start gap-1">
+        <button
+          type="button"
+          aria-label={`Go to highlight: ${highlight.excerpt}`}
+          onClick={() => onJump?.(highlight)}
+          className="motion-color min-w-0 flex-1 rounded border-l-2 border-accent pl-2 text-left text-xs text-ink outline-none hover:text-accent focus-visible:ring-1 focus-visible:ring-accent"
+        >
+          <span className="line-clamp-2">{highlight.excerpt}</span>
+        </button>
+        <button
+          type="button"
+          aria-label={`Remove highlight: ${highlight.excerpt}`}
+          onClick={() => onRemove?.(highlight.id)}
+          className="motion-color flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted outline-none hover:text-red-400 focus-visible:ring-1 focus-visible:ring-accent"
+        >
+          <X size={12} strokeWidth={1.75} />
+        </button>
+      </div>
+      <input
+        type="text"
+        aria-label={`Note for highlight: ${highlight.excerpt}`}
+        placeholder="Add a note"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft !== highlight.note) onNote?.(highlight.id, draft);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+        className="w-full rounded border border-line bg-transparent px-2 py-1 text-[11px] text-ink outline-none placeholder:text-muted focus:border-accent"
+      />
+    </li>
+  );
 }
 
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
@@ -47,6 +109,10 @@ export function LibraryPanel({
   onClearAll,
   onJumpToBookmark,
   onRemoveBookmark,
+  highlights = [],
+  onJumpToHighlight,
+  onHighlightNote,
+  onRemoveHighlight,
 }: LibraryPanelProps) {
   const [confirming, setConfirming] = useState(confirmClear);
 
@@ -149,6 +215,23 @@ export function LibraryPanel({
                     <X size={12} strokeWidth={1.75} />
                   </button>
                 </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {highlights.length > 0 ? (
+          <div className="border-t border-line p-1">
+            <h3 className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted">Highlights</h3>
+            <ul>
+              {highlights.map((highlight) => (
+                <HighlightRow
+                  key={highlight.id}
+                  highlight={highlight}
+                  onJump={onJumpToHighlight}
+                  onNote={onHighlightNote}
+                  onRemove={onRemoveHighlight}
+                />
               ))}
             </ul>
           </div>

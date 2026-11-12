@@ -107,6 +107,47 @@ describe('LibraryPanel', () => {
     expect(props.onRemoveBookmark).toHaveBeenCalledWith('bm');
   });
 
+  describe('highlights', () => {
+    const highlight = { id: 'h1', docId: 'a', start: 4, end: 9, note: 'why', createdAt: 1, excerpt: 'quick' };
+
+    it('lists the highlights of the open document with their text and note', () => {
+      setup({ highlights: [highlight] });
+      expect(screen.getByRole('button', { name: 'Go to highlight: quick' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Note for highlight: quick' })).toHaveValue('why');
+    });
+
+    it('jumps to a highlight', () => {
+      const onJumpToHighlight = vi.fn();
+      setup({ highlights: [highlight], onJumpToHighlight });
+      fireEvent.click(screen.getByRole('button', { name: 'Go to highlight: quick' }));
+      expect(onJumpToHighlight).toHaveBeenCalledWith(highlight);
+    });
+
+    it('saves an edited note when the field loses focus', () => {
+      const onHighlightNote = vi.fn();
+      setup({ highlights: [highlight], onHighlightNote });
+      const field = screen.getByRole('textbox', { name: 'Note for highlight: quick' });
+      fireEvent.change(field, { target: { value: 'a better note' } });
+      expect(onHighlightNote).not.toHaveBeenCalled();
+      fireEvent.blur(field);
+      expect(onHighlightNote).toHaveBeenCalledWith('h1', 'a better note');
+    });
+
+    it('does not save an unchanged note', () => {
+      const onHighlightNote = vi.fn();
+      setup({ highlights: [highlight], onHighlightNote });
+      fireEvent.blur(screen.getByRole('textbox', { name: 'Note for highlight: quick' }));
+      expect(onHighlightNote).not.toHaveBeenCalled();
+    });
+
+    it('removes a highlight', () => {
+      const onRemoveHighlight = vi.fn();
+      setup({ highlights: [highlight], onRemoveHighlight });
+      fireEvent.click(screen.getByRole('button', { name: 'Remove highlight: quick' }));
+      expect(onRemoveHighlight).toHaveBeenCalledWith('h1');
+    });
+  });
+
   it('says so when the library is empty', () => {
     setup({ documents: [], currentId: null });
     expect(screen.getByText(/No documents yet/)).toBeInTheDocument();

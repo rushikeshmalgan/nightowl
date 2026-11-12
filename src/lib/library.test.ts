@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto';
 import { SEED_DOCS } from '../data/seeds';
 import { createDb } from './db';
-import type { NocturneDB } from './db';
+import type { NightOwlDB } from './db';
 import {
   clearAll,
   deleteDocument,
@@ -15,7 +15,7 @@ import {
 } from './library';
 
 let counter = 0;
-let db: NocturneDB;
+let db: NightOwlDB;
 
 function file(name: string, bytes: number): File {
   return new File([new Uint8Array(bytes)], name);
@@ -197,6 +197,11 @@ describe('seedIfEmpty', () => {
     const docs = await listDocuments(db);
     expect(docs.map((doc) => doc.name)).toEqual(SEED_DOCS.map((seed) => seed.name));
     expect(docs.every((doc) => doc.type === 'text')).toBe(true);
+  });
+
+  it('adds the seeds once when two callers race (React StrictMode, two tabs)', async () => {
+    await Promise.all([seedIfEmpty(db), seedIfEmpty(db)]);
+    expect(await db.documents.count()).toBe(SEED_DOCS.length);
   });
 
   it('does not bring the seeds back after the user deletes them', async () => {

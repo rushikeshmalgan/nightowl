@@ -1,31 +1,54 @@
-import { Bookmark, ChevronsDown, Library, ScanLine, Search, SlidersHorizontal, Type, Volume2 } from 'lucide-react';
+import { Bookmark, ChevronsDown, Library, Music, ScanLine, Search, SlidersHorizontal, Type, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AudioPanel } from './components/AudioPanel';
 import { Chrome } from './components/Chrome';
 import { CommandPalette } from './components/CommandPalette';
 import { DropOverlay } from './components/DropOverlay';
+import { LedPulse } from './components/LedPulse';
 import { LibraryPanel } from './components/LibraryPanel';
+import { PresenceBadge } from './components/PresenceBadge';
+import { MusicDock } from './components/MusicDock';
+import type { HighlightItem } from './components/LibraryPanel';
 import { Rail } from './components/Rail';
+import { SpotifyPlayer } from './components/SpotifyPlayer';
+import { YouTubeAudioPlayer } from './components/YouTubeAudioPlayer';
 import type { RailItem } from './components/Rail';
 import { ReaderCanvas } from './components/ReaderCanvas';
 import type { ReaderHandle, ReaderPosition } from './components/ReaderCanvas';
 import { StatusLine } from './components/StatusLine';
 import { TuningPanel } from './components/TuningPanel';
 import { WarmthOverlay } from './components/WarmthOverlay';
+import { useAudioEngine } from './hooks/useAudioEngine';
+import { useAudioLevel } from './hooks/useAudioLevel';
 import { useBookmarks } from './hooks/useBookmarks';
+import { useHighlights } from './hooks/useHighlights';
 import { useHotkeys } from './hooks/useHotkeys';
 import { useIdleFade } from './hooks/useIdleFade';
 import { useLocalCache } from './hooks/useLocalCache';
+import { useMusicPrefs } from './hooks/useMusicPrefs';
+import { useMusicSource } from './hooks/useMusicSource';
+import { useOnline } from './hooks/useOnline';
+import { usePresence } from './hooks/usePresence';
 import { usePrefsSync } from './hooks/usePrefsSync';
+import { useSleepTimer } from './hooks/useSleepTimer';
 import { useTts } from './hooks/useTts';
-import { buildCommands } from './lib/commands';
+import { buildCommands, pageCommands } from './lib/commands';
+import { db } from './lib/db';
+import type { PlaylistItem, SourceId } from './lib/music/adapter';
+import { createDefaultAdapters } from './lib/music/defaultAdapters';
+import type { DefaultAdapters } from './lib/music/defaultAdapters';
+import { CATEGORIES } from './lib/music/playlists';
+import { listTracks } from './lib/tracks';
 import { useUi } from './store/ui';
-import type { BookmarkRecord, DocMeta, DocRecord } from './types';
+import type { BookmarkRecord, DocMeta, DocRecord, TrackRecord } from './types';
 
 const ICON = { size: 16, strokeWidth: 1.75 } as const;
 const MISSING_DOC = 'This document is no longer in the library.';
 
-export default function App() {
+export default function App({ adapters: injected }: { adapters?: DefaultAdapters } = {}) {
   const ui = useUi();
+  // Created once; tests pass fakes.
+  const [players] = useState<DefaultAdapters>(() => injected ?? createDefaultAdapters());
   usePrefsSync();
   const cache = useLocalCache();
 
@@ -37,7 +60,57 @@ export default function App() {
 
   const readerRef = useRef<ReaderHandle>(null);
   const bookmarks = useBookmarks(doc?.id ?? null);
+  const highlights = useHighlights(doc?.type === 'text' ? doc.id : null);
+  const highlightItems = useMemo<HighlightItem[]>(
+    () =>
+      highlights.highlights.map((highlight) => ({
+        ...highlight,
+        excerpt: docText.slice(highlight.start, highlight.end).replace(/\s+/g, ' ').trim().slice(0, 80),
+      })),
+    [highlights.highlights, docText],
+  );
   const tts = useTts(docText, ui.speechRate);
+  const audio = useAudioEngine();
+  const sleep = useSleepTimer();
+  const level = useAudioLevel(audio.analyser, audio.state.playing);
+  const music = useMusicSource(players.adapters);
+  const musicPrefs = useMusicPrefs();
+  const online = useOnline();
+  // Shares only the kind of document open, never its name.
+  const presence = usePresence(doc ? doc.type : 'none');
+  const [tracks, setTracks] = useState<TrackRecord[]>([]);
+  const [musicItem, setMusicItem] = useState<PlaylistItem | null>(null);
+
+  const refreshTracks = useCallback(() => {
+    void listTracks(db).then(setTracks, () => setTracks([]));
+  }, []);
+  useEffect(refreshTracks, [refreshTracks]);
+
+  const { select: selectSource, toggle: toggleMusic } = music;
+  const { setSource: rememberSource } = musicPrefs;
+  const chooseMusic = useCallback(
+    async (source: SourceId, item?: PlaylistItem) => {
+      rememberSource(source);
+      if (item) setMusicItem(item);
+      await selectSource(source, item);
+    },
+    [selectSource, rememberSource],
+  );
+
+  // Return to the source the reader used last time.
+  const restoredSource = useRef(false);
+  useEffect(() => {
+    if (!musicPrefs.ready || restoredSource.current) return;
+    restoredSource.current = true;
+    if (musicPrefs.source !== 'noise' && musicPrefs.source !== 'spotify' && musicPrefs.source !== 'youtube') {
+      void selectSource(musicPrefs.source);
+    }
+  }, [musicPrefs.ready, musicPrefs.source, selectSource]);
+
+  const toggleNoise = useCallback(async () => {
+    if (music.activeSource !== 'noise') await chooseMusic('noise');
+    await toggleMusic();
+  }, [music.activeSource, chooseMusic, toggleMusic]);
 
   const { open: openFromCache, importFile, remove: removeFromCache, clearAll, refresh } = cache;
 
@@ -117,7 +190,7 @@ export default function App() {
   }, []);
 
   // Panels the reader is actively using should not fade out from under them.
-  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen;
+  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen || ui.audioOpen;
   const { idle } = useIdleFade({ enabled: !panelOpen });
 
   const tuningOpenedByHover = useRef(false);
@@ -131,6 +204,8 @@ export default function App() {
     },
     f: () => ui.toggle('focusRuler'),
     s: () => tts.toggle(),
+    a: () => void toggleNoise(),
+    'mod+m': () => void toggleMusic(),
   });
 
   const commands = useMemo(
@@ -141,8 +216,18 @@ export default function App() {
         documents: cache.documents,
         openDocument: (id) => void openDoc(id),
         requestClear,
+        audio: { toggle: () => void toggleNoise(), setTrack: (id) => void audio.setTrack(id) },
+        sleep: { set: sleep.set },
+        music: { select: (source) => void chooseMusic(source), toggle: () => void toggleMusic() },
       }),
-    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear],
+    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic],
+  );
+
+  // Typing a page number in the palette offers a jump to that page.
+  const numPages = position?.numPages ?? null;
+  const dynamicCommands = useCallback(
+    (query: string) => pageCommands(query, numPages, (page) => readerRef.current?.goToPage(page)),
+    [numPages],
   );
 
   const railItems: RailItem[] = [
@@ -153,7 +238,19 @@ export default function App() {
       pressed: ui.libraryOpen,
       onClick: () => {
         setConfirmClear(false);
+        ui.set('audioOpen', false);
         ui.toggle('libraryOpen');
+      },
+    },
+    {
+      id: 'audio',
+      label: 'Ambient sound',
+      icon: <Music {...ICON} />,
+      hotkey: 'a',
+      pressed: ui.audioOpen,
+      onClick: () => {
+        ui.set('libraryOpen', false);
+        ui.toggle('audioOpen');
       },
     },
     {
@@ -214,17 +311,28 @@ export default function App() {
     ui.focusRuler ? 'Ruler' : null,
     ui.autoScroll ? 'Auto-scroll' : null,
     tts.speaking ? 'Reading aloud' : null,
+    audio.state.playing ? 'Sound' : null,
   ].filter((flag): flag is string => flag !== null);
 
   const page = position?.page ?? 1;
 
   return (
-    <div role="application" aria-label="Nocturne Reader" className="relative h-full overflow-hidden bg-canvas text-ink">
-      <ReaderCanvas ref={readerRef} doc={doc} onText={setDocText} onPosition={setPosition} />
+    <div role="application" aria-label="NightOwl Reader" className="relative h-full overflow-hidden bg-canvas text-ink">
+      <ReaderCanvas
+        ref={readerRef}
+        doc={doc}
+        highlights={highlights.highlights}
+        onHighlight={(range) => void highlights.add(range)}
+        onText={setDocText}
+        onPosition={setPosition}
+        onOpenLibrary={() => ui.set('libraryOpen', true)}
+      />
 
       <Chrome idle={idle}>
         <Rail items={railItems} />
         <StatusLine title={doc?.name ?? 'No document'} flags={flags}>
+          <PresenceBadge {...presence} />
+          {audio.state.playing ? <LedPulse level={level} source={audio.state.source} /> : null}
           {doc && position ? (
             <span className="font-mono text-[11px] tabular-nums">
               {position.page} / {position.numPages}
@@ -262,6 +370,25 @@ export default function App() {
             onClearAll={() => void clearEverything()}
             onJumpToBookmark={jumpToBookmark}
             onRemoveBookmark={(id) => void bookmarks.remove(id)}
+            highlights={highlightItems}
+            onJumpToHighlight={(highlight) => {
+              readerRef.current?.goToHighlight(highlight.start);
+              useUi.getState().set('libraryOpen', false);
+            }}
+            onHighlightNote={(id, note) => void highlights.setNote(id, note)}
+            onRemoveHighlight={(id) => void highlights.remove(id)}
+          />
+        ) : null}
+
+        {ui.audioOpen ? (
+          <AudioPanel
+            state={audio.state}
+            analyser={audio.analyser}
+            level={level}
+            sleep={sleep}
+            onToggle={() => void audio.toggle()}
+            onTrack={(id) => void audio.setTrack(id)}
+            onVolume={audio.setVolume}
           />
         ) : null}
 
@@ -284,10 +411,27 @@ export default function App() {
             }
           }}
         />
+        <MusicDock
+          music={{ ...music, select: chooseMusic }}
+          categories={CATEGORIES}
+          tracks={tracks}
+          customPlaylists={musicPrefs.customPlaylists}
+          online={online}
+          onAddCustom={musicPrefs.addCustom}
+          onTracksChanged={refreshTracks}
+        />
       </Chrome>
 
+      {/* The players stay visible while active, outside the chrome that fades. */}
+      <YouTubeAudioPlayer adapter={players.youtube} active={music.activeSource === 'youtube'} />
+      <SpotifyPlayer
+        adapter={players.spotify}
+        active={music.activeSource === 'spotify'}
+        itemUri={musicItem?.source === 'spotify' ? musicItem.ref : null}
+      />
+
       <DropOverlay onFiles={(files) => void importFiles(files)} />
-      <CommandPalette open={ui.paletteOpen} onOpenChange={(open) => ui.set('paletteOpen', open)} commands={commands} />
+      <CommandPalette open={ui.paletteOpen} onOpenChange={(open) => ui.set('paletteOpen', open)} commands={commands} dynamic={dynamicCommands} />
       <WarmthOverlay />
     </div>
   );
