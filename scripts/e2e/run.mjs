@@ -234,6 +234,43 @@ const groups = {
     });
   },
 
+  async dock(page) {
+    const dock = page.getByRole('region', { name: 'Music', exact: true });
+    await check('dock', 'the music dock sits along the bottom, 56px tall', async () => {
+      await wake(page);
+      const box = await dock.boundingBox();
+      expect(box && Math.round(box.height) === 56, `height was ${box?.height}`);
+      expect(box && Math.abs(box.y + box.height - 800) < 2, `bottom edge at ${box && box.y + box.height}`);
+    });
+    await check('dock', 'Night Noise plays from the dock and shows what is playing', async () => {
+      await wake(page);
+      await dock.getByRole('button', { name: 'Play' }).click();
+      await dock.getByRole('button', { name: 'Pause' }).waitFor();
+      const text = await dock.innerText();
+      expect(/Lo-Fi|Rain|Pink Noise/.test(text), `dock said "${text.replace(/\s+/g, ' ').slice(0, 80)}"`);
+      await dock.getByRole('button', { name: 'Pause' }).click();
+      await dock.getByRole('button', { name: 'Play' }).waitFor();
+    });
+    await check('dock', 'browse shows the four categories plus My Tracks', async () => {
+      await wake(page);
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      const tabs = await page.getByRole('tab').allInnerTexts();
+      expect(tabs.length === 5 && tabs[1] === 'Hindi / Bollywood Chill', `tabs were ${JSON.stringify(tabs)}`);
+      await page.getByRole('tab', { name: 'Nature & White Noise' }).click();
+      await page.getByRole('region', { name: 'Browse music' }).getByRole('button', { name: /Rain\s/ }).first().click();
+      await dock.getByText('Rain', { exact: true }).waitFor();
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+    });
+    await check('dock', 'a bad pasted link is refused', async () => {
+      await wake(page);
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      await page.getByLabel('Paste a Spotify or YouTube link').fill('https://youtube.com.evil.example/watch?v=x');
+      await page.getByRole('button', { name: 'Add link' }).click();
+      await page.getByText('That link is not a Spotify or YouTube link.').waitFor();
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+    });
+  },
+
   async audio(page) {
     const panel = page.getByRole('region', { name: 'Ambient sound' });
     const level = () => panel.getByTestId('led').evaluate((el) => Number(el.dataset.level));

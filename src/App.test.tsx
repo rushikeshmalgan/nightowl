@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import App from './App';
 import { useUi } from './store/ui';
 import { resetFakes, state } from './test/fakes';
+import { makeFakeAdapters } from './test/fakeAdapter';
+import type { DefaultAdapters } from './lib/music/defaultAdapters';
 
 vi.mock('./lib/db', async () => (await import('./test/fakes')).fakeDbModule);
 vi.mock('./lib/library', async () => (await import('./test/fakes')).fakeLibraryModule);
@@ -18,6 +20,7 @@ vi.mock('./lib/audio/instance', async () => {
   const engine = new AudioEngine({ createContext: () => asContext(new FakeAudioContext()) });
   return { getAudioEngine: () => engine };
 });
+vi.mock('./lib/tracks', () => ({ listTracks: async () => [] }));
 vi.mock('./lib/highlightStore', async () => (await import('./test/fakes')).fakeHighlightStoreModule);
 
 function press(init: KeyboardEventInit) {
@@ -258,5 +261,67 @@ describe('App library', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add bookmark' }));
     const library = await openLibrary();
     expect(await within(library).findByRole('button', { name: /Go to bookmark Page 1, page 1/ })).toBeInTheDocument();
+  });
+});
+
+describe('App music dock', () => {
+  beforeEach(() => {
+    resetFakes();
+    act(() => useUi.getState().reset());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function fakePlayers(): DefaultAdapters & { fakes: ReturnType<typeof makeFakeAdapters> } {
+    const fakes = makeFakeAdapters();
+    const youtube = Object.assign(fakes.youtube, { mount: vi.fn() });
+    const spotify = Object.assign(fakes.spotify, { mount: vi.fn() });
+    return { adapters: fakes, youtube, spotify, fakes } as unknown as DefaultAdapters & { fakes: ReturnType<typeof makeFakeAdapters> };
+  }
+
+  it('shows the music dock', async () => {
+    render(<App adapters={fakePlayers()} />);
+    await screen.findByRole('article');
+    expect(screen.getByRole('region', { name: 'Music' })).toHaveClass('h-14');
+  });
+
+  it('plays and pauses the active source with Ctrl+M', async () => {
+    const players = fakePlayers();
+    render(<App adapters={players} />);
+    await screen.findByRole('article');
+    press({ key: 'm', ctrlKey: true });
+    await waitFor(() => expect(players.fakes.noise.play).toHaveBeenCalledTimes(1));
+    press({ key: 'm', ctrlKey: true });
+    await waitFor(() => expect(players.fakes.noise.pause).toHaveBeenCalled());
+  });
+
+  it('switches to YouTube from the palette', async () => {
+    const user = userEvent.setup();
+    const players = fakePlayers();
+    render(<App adapters={players} />);
+    await screen.findByRole('article');
+    press({ key: 'k', ctrlKey: true });
+    await user.type(screen.getByRole('combobox'), 'switch to youtube');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'YouTube', pressed: true })).toBeInTheDocument());
+  });
+
+  it('keeps the YouTube player visible while the rest of the chrome fades', async () => {
+    const players = fakePlayers();
+    render(<App adapters={players} />);
+    await screen.findByRole('article');
+    fireEvent.click(screen.getByRole('button', { name: 'YouTube' }));
+    await waitFor(() => expect(screen.getByTestId('yt-tile')).toBeVisible());
+    vi.useFakeTimers();
+    act(() => window.dispatchEvent(new Event('pointermove')));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(screen.getByTestId('chrome').style.opacity).toBe('0');
+    const tile = screen.getByTestId('yt-tile');
+    expect(tile.closest('[data-testid="chrome"]')).toBeNull();
+    expect(tile).toBeVisible();
   });
 });

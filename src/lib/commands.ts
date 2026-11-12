@@ -16,6 +16,8 @@ export interface CommandDeps {
   /** The built-in ambient sound. */
   audio?: { toggle(): void; setTrack(id: TrackId): void };
   sleep?: { set(minutes: 0 | 15 | 30 | 60): void };
+  /** The music dock. */
+  music?: { select(source: 'noise' | 'spotify' | 'youtube' | 'tracks'): void; toggle(): void };
 }
 
 const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
@@ -26,7 +28,7 @@ const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
 ];
 
 /** The static command list for the palette. Later features append their own. */
-export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep }: CommandDeps): Command[] {
+export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music }: CommandDeps): Command[] {
   const commands: Command[] = [
     ...(openDocument
       ? documents.map<Command>((doc) => ({
@@ -76,6 +78,17 @@ export function buildCommands({ ui, tts, documents = [], openDocument, requestCl
         run: () => sleep.set(minutes),
       })),
       { id: 'sleep-off', title: 'Sleep timer: off', group: 'Audio', run: () => sleep.set(0) },
+    );
+  }
+  if (music) {
+    commands.push(
+      { id: 'music-toggle', title: 'Play or pause music', group: 'Music', hotkey: 'mod+m', run: () => music.toggle() },
+      ...([
+        ['noise', 'Night Noise'],
+        ['spotify', 'Spotify'],
+        ['youtube', 'YouTube'],
+        ['tracks', 'My Tracks'],
+      ] as const).map<Command>(([id, label]) => ({ id: `music-${id}`, title: `Switch to ${label}`, group: 'Music', run: () => music.select(id) })),
     );
   }
   if (requestClear) {

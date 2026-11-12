@@ -6,8 +6,11 @@ import { CommandPalette } from './components/CommandPalette';
 import { DropOverlay } from './components/DropOverlay';
 import { LedPulse } from './components/LedPulse';
 import { LibraryPanel } from './components/LibraryPanel';
+import { MusicDock } from './components/MusicDock';
 import type { HighlightItem } from './components/LibraryPanel';
 import { Rail } from './components/Rail';
+import { SpotifyPlayer } from './components/SpotifyPlayer';
+import { YouTubeAudioPlayer } from './components/YouTubeAudioPlayer';
 import type { RailItem } from './components/Rail';
 import { ReaderCanvas } from './components/ReaderCanvas';
 import type { ReaderHandle, ReaderPosition } from './components/ReaderCanvas';
@@ -21,18 +24,29 @@ import { useHighlights } from './hooks/useHighlights';
 import { useHotkeys } from './hooks/useHotkeys';
 import { useIdleFade } from './hooks/useIdleFade';
 import { useLocalCache } from './hooks/useLocalCache';
+import { useMusicPrefs } from './hooks/useMusicPrefs';
+import { useMusicSource } from './hooks/useMusicSource';
+import { useOnline } from './hooks/useOnline';
 import { usePrefsSync } from './hooks/usePrefsSync';
 import { useSleepTimer } from './hooks/useSleepTimer';
 import { useTts } from './hooks/useTts';
 import { buildCommands, pageCommands } from './lib/commands';
+import { db } from './lib/db';
+import type { PlaylistItem, SourceId } from './lib/music/adapter';
+import { createDefaultAdapters } from './lib/music/defaultAdapters';
+import type { DefaultAdapters } from './lib/music/defaultAdapters';
+import { CATEGORIES } from './lib/music/playlists';
+import { listTracks } from './lib/tracks';
 import { useUi } from './store/ui';
-import type { BookmarkRecord, DocMeta, DocRecord } from './types';
+import type { BookmarkRecord, DocMeta, DocRecord, TrackRecord } from './types';
 
 const ICON = { size: 16, strokeWidth: 1.75 } as const;
 const MISSING_DOC = 'This document is no longer in the library.';
 
-export default function App() {
+export default function App({ adapters: injected }: { adapters?: DefaultAdapters } = {}) {
   const ui = useUi();
+  // Created once; tests pass fakes.
+  const [players] = useState<DefaultAdapters>(() => injected ?? createDefaultAdapters());
   usePrefsSync();
   const cache = useLocalCache();
 
@@ -57,6 +71,42 @@ export default function App() {
   const audio = useAudioEngine();
   const sleep = useSleepTimer();
   const level = useAudioLevel(audio.analyser, audio.state.playing);
+  const music = useMusicSource(players.adapters);
+  const musicPrefs = useMusicPrefs();
+  const online = useOnline();
+  const [tracks, setTracks] = useState<TrackRecord[]>([]);
+  const [musicItem, setMusicItem] = useState<PlaylistItem | null>(null);
+
+  const refreshTracks = useCallback(() => {
+    void listTracks(db).then(setTracks, () => setTracks([]));
+  }, []);
+  useEffect(refreshTracks, [refreshTracks]);
+
+  const { select: selectSource, toggle: toggleMusic } = music;
+  const { setSource: rememberSource } = musicPrefs;
+  const chooseMusic = useCallback(
+    async (source: SourceId, item?: PlaylistItem) => {
+      rememberSource(source);
+      if (item) setMusicItem(item);
+      await selectSource(source, item);
+    },
+    [selectSource, rememberSource],
+  );
+
+  // Return to the source the reader used last time.
+  const restoredSource = useRef(false);
+  useEffect(() => {
+    if (!musicPrefs.ready || restoredSource.current) return;
+    restoredSource.current = true;
+    if (musicPrefs.source !== 'noise' && musicPrefs.source !== 'spotify' && musicPrefs.source !== 'youtube') {
+      void selectSource(musicPrefs.source);
+    }
+  }, [musicPrefs.ready, musicPrefs.source, selectSource]);
+
+  const toggleNoise = useCallback(async () => {
+    if (music.activeSource !== 'noise') await chooseMusic('noise');
+    await toggleMusic();
+  }, [music.activeSource, chooseMusic, toggleMusic]);
 
   const { open: openFromCache, importFile, remove: removeFromCache, clearAll, refresh } = cache;
 
@@ -150,8 +200,8 @@ export default function App() {
     },
     f: () => ui.toggle('focusRuler'),
     s: () => tts.toggle(),
-    a: () => void audio.toggle(),
-    'mod+m': () => void audio.toggle(),
+    a: () => void toggleNoise(),
+    'mod+m': () => void toggleMusic(),
   });
 
   const commands = useMemo(
@@ -162,10 +212,11 @@ export default function App() {
         documents: cache.documents,
         openDocument: (id) => void openDoc(id),
         requestClear,
-        audio: { toggle: () => void audio.toggle(), setTrack: (id) => void audio.setTrack(id) },
+        audio: { toggle: () => void toggleNoise(), setTrack: (id) => void audio.setTrack(id) },
         sleep: { set: sleep.set },
+        music: { select: (source) => void chooseMusic(source), toggle: () => void toggleMusic() },
       }),
-    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, audio.toggle, audio.setTrack, sleep.set],
+    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic],
   );
 
   // Typing a page number in the palette offers a jump to that page.
@@ -355,7 +406,24 @@ export default function App() {
             }
           }}
         />
+        <MusicDock
+          music={{ ...music, select: chooseMusic }}
+          categories={CATEGORIES}
+          tracks={tracks}
+          customPlaylists={musicPrefs.customPlaylists}
+          online={online}
+          onAddCustom={musicPrefs.addCustom}
+          onTracksChanged={refreshTracks}
+        />
       </Chrome>
+
+      {/* The players stay visible while active, outside the chrome that fades. */}
+      <YouTubeAudioPlayer adapter={players.youtube} active={music.activeSource === 'youtube'} />
+      <SpotifyPlayer
+        adapter={players.spotify}
+        active={music.activeSource === 'spotify'}
+        itemUri={musicItem?.source === 'spotify' ? musicItem.ref : null}
+      />
 
       <DropOverlay onFiles={(files) => void importFiles(files)} />
       <CommandPalette open={ui.paletteOpen} onOpenChange={(open) => ui.set('paletteOpen', open)} commands={commands} dynamic={dynamicCommands} />

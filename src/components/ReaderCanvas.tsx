@@ -244,7 +244,8 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
             latest.current.onPosition?.(position);
           }}
         >
-          <div className="px-6 py-12 md:px-12">{body}</div>
+          {/* Bottom padding clears the 56px music dock. */}
+          <div className="px-6 pb-28 pt-12 md:px-12">{body}</div>
         </div>
       )}
       {focusRuler ? <FocusRuler y={rulerY} /> : null}
