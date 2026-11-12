@@ -13,13 +13,14 @@ Updated 2026-11-12. Work is on branch `feat/@@@`; `main` is untouched.
 
 - **Phase 3, Tasks 14–19:** PDF viewer (lazy pages, selectable text, night pages, saved position), PSD layer inspector with live composite, text highlights with notes, validated imports with plain error messages, per-type viewer routing.
 
-At the last commit: 315 unit tests pass, typecheck is clean, and `npm run e2e` passes 17 checks in a real browser (real PDF and PSD files).
+- **Phase 4, Tasks 20–22:** ambient audio engine (Lo-Fi, Rain, Pink Noise synthesized in the browser, optional streamed files with fallback), sleep timer with fade, audio panel with live waveform and LED, `A` and `Ctrl/Cmd+M` hotkeys.
+
+At the last commit: 392 unit tests pass, typecheck is clean, and `npm run e2e` passes 22 checks in a real browser (real PDF and PSD files, real audio).
 
 ## Next
 
-1. **Tasks 20–22:** audio engine.
-2. **Tasks 23–30:** music dock and CSP.
-3. **Task 31:** presence. **Task 32:** remove the prototype, write the README, final check.
+1. **Tasks 23–30:** music dock (Spotify, YouTube, uploaded tracks) and CSP.
+2. **Task 31:** presence. **Task 32:** remove the prototype, write the README, final check.
 
 ## Resuming
 

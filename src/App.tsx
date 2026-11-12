@@ -1,8 +1,10 @@
-import { Bookmark, ChevronsDown, Library, ScanLine, Search, SlidersHorizontal, Type, Volume2 } from 'lucide-react';
+import { Bookmark, ChevronsDown, Library, Music, ScanLine, Search, SlidersHorizontal, Type, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AudioPanel } from './components/AudioPanel';
 import { Chrome } from './components/Chrome';
 import { CommandPalette } from './components/CommandPalette';
 import { DropOverlay } from './components/DropOverlay';
+import { LedPulse } from './components/LedPulse';
 import { LibraryPanel } from './components/LibraryPanel';
 import type { HighlightItem } from './components/LibraryPanel';
 import { Rail } from './components/Rail';
@@ -12,12 +14,15 @@ import type { ReaderHandle, ReaderPosition } from './components/ReaderCanvas';
 import { StatusLine } from './components/StatusLine';
 import { TuningPanel } from './components/TuningPanel';
 import { WarmthOverlay } from './components/WarmthOverlay';
+import { useAudioEngine } from './hooks/useAudioEngine';
+import { useAudioLevel } from './hooks/useAudioLevel';
 import { useBookmarks } from './hooks/useBookmarks';
 import { useHighlights } from './hooks/useHighlights';
 import { useHotkeys } from './hooks/useHotkeys';
 import { useIdleFade } from './hooks/useIdleFade';
 import { useLocalCache } from './hooks/useLocalCache';
 import { usePrefsSync } from './hooks/usePrefsSync';
+import { useSleepTimer } from './hooks/useSleepTimer';
 import { useTts } from './hooks/useTts';
 import { buildCommands, pageCommands } from './lib/commands';
 import { useUi } from './store/ui';
@@ -49,6 +54,9 @@ export default function App() {
     [highlights.highlights, docText],
   );
   const tts = useTts(docText, ui.speechRate);
+  const audio = useAudioEngine();
+  const sleep = useSleepTimer();
+  const level = useAudioLevel(audio.analyser, audio.state.playing);
 
   const { open: openFromCache, importFile, remove: removeFromCache, clearAll, refresh } = cache;
 
@@ -128,7 +136,7 @@ export default function App() {
   }, []);
 
   // Panels the reader is actively using should not fade out from under them.
-  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen;
+  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen || ui.audioOpen;
   const { idle } = useIdleFade({ enabled: !panelOpen });
 
   const tuningOpenedByHover = useRef(false);
@@ -142,6 +150,8 @@ export default function App() {
     },
     f: () => ui.toggle('focusRuler'),
     s: () => tts.toggle(),
+    a: () => void audio.toggle(),
+    'mod+m': () => void audio.toggle(),
   });
 
   const commands = useMemo(
@@ -152,8 +162,10 @@ export default function App() {
         documents: cache.documents,
         openDocument: (id) => void openDoc(id),
         requestClear,
+        audio: { toggle: () => void audio.toggle(), setTrack: (id) => void audio.setTrack(id) },
+        sleep: { set: sleep.set },
       }),
-    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear],
+    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, audio.toggle, audio.setTrack, sleep.set],
   );
 
   // Typing a page number in the palette offers a jump to that page.
@@ -171,7 +183,19 @@ export default function App() {
       pressed: ui.libraryOpen,
       onClick: () => {
         setConfirmClear(false);
+        ui.set('audioOpen', false);
         ui.toggle('libraryOpen');
+      },
+    },
+    {
+      id: 'audio',
+      label: 'Ambient sound',
+      icon: <Music {...ICON} />,
+      hotkey: 'a',
+      pressed: ui.audioOpen,
+      onClick: () => {
+        ui.set('libraryOpen', false);
+        ui.toggle('audioOpen');
       },
     },
     {
@@ -232,6 +256,7 @@ export default function App() {
     ui.focusRuler ? 'Ruler' : null,
     ui.autoScroll ? 'Auto-scroll' : null,
     tts.speaking ? 'Reading aloud' : null,
+    audio.state.playing ? 'Sound' : null,
   ].filter((flag): flag is string => flag !== null);
 
   const page = position?.page ?? 1;
@@ -251,6 +276,7 @@ export default function App() {
       <Chrome idle={idle}>
         <Rail items={railItems} />
         <StatusLine title={doc?.name ?? 'No document'} flags={flags}>
+          {audio.state.playing ? <LedPulse level={level} source={audio.state.source} /> : null}
           {doc && position ? (
             <span className="font-mono text-[11px] tabular-nums">
               {position.page} / {position.numPages}
@@ -295,6 +321,18 @@ export default function App() {
             }}
             onHighlightNote={(id, note) => void highlights.setNote(id, note)}
             onRemoveHighlight={(id) => void highlights.remove(id)}
+          />
+        ) : null}
+
+        {ui.audioOpen ? (
+          <AudioPanel
+            state={audio.state}
+            analyser={audio.analyser}
+            level={level}
+            sleep={sleep}
+            onToggle={() => void audio.toggle()}
+            onTrack={(id) => void audio.setTrack(id)}
+            onVolume={audio.setVolume}
           />
         ) : null}
 

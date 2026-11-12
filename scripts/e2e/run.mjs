@@ -233,6 +233,69 @@ const groups = {
       await page.keyboard.press('End');
     });
   },
+
+  async audio(page) {
+    const panel = page.getByRole('region', { name: 'Ambient sound' });
+    const level = () => panel.getByTestId('led').evaluate((el) => Number(el.dataset.level));
+    const loud = () =>
+      page.waitForFunction(
+        () => Number(document.querySelector('[aria-label="Ambient sound"] [data-testid="led"]')?.dataset.level ?? 0) > 0.01,
+      );
+
+    await check('audio', 'the ambient sound panel plays the built-in synth', async () => {
+      await wake(page);
+      await page.getByRole('button', { name: 'Ambient sound', exact: true }).click();
+      await panel.getByRole('button', { name: 'Play' }).click();
+      await panel.getByRole('button', { name: 'Pause' }).waitFor();
+      await loud();
+      const source = await panel.getByTestId('led').getAttribute('data-source');
+      expect(source === 'synth', `source was ${source}`);
+    });
+    await check('audio', 'every track makes sound', async () => {
+      const heard = [];
+      for (const name of ['Rain', 'Pink Noise', 'Lo-Fi']) {
+        await panel.getByRole('button', { name, exact: true }).click();
+        await page.waitForTimeout(700);
+        await loud();
+        heard.push(`${name} ${(await level()).toFixed(2)}`);
+      }
+      return heard.join(', ');
+    });
+    await check('audio', 'the waveform follows the signal', async () => {
+      const rows = await panel.locator('canvas[aria-label="Audio waveform"]').evaluate((canvas) => {
+        const { data, width, height } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+        let used = 0;
+        for (let y = 0; y < height; y++) {
+          let any = false;
+          for (let x = 0; x < width && !any; x++) any = data[(y * width + x) * 4 + 3] > 40;
+          if (any) used++;
+        }
+        return used;
+      });
+      expect(rows > 3, `the line covered only ${rows} rows, so it looks flat`);
+    });
+    await check('audio', 'volume zero silences it and the level follows', async () => {
+      const slider = panel.getByRole('slider', { name: 'Volume' });
+      await slider.focus();
+      await page.keyboard.press('Home');
+      await page.waitForFunction(
+        () => Number(document.querySelector('[aria-label="Ambient sound"] [data-testid="led"]')?.dataset.level ?? 1) < 0.005,
+      );
+      for (let i = 0; i < 5; i++) await page.keyboard.press('PageUp');
+      await loud();
+    });
+    await check('audio', 'pause stops the sound and A starts it again', async () => {
+      await panel.getByRole('button', { name: 'Pause' }).click();
+      await panel.getByRole('button', { name: 'Play' }).waitFor();
+      const off = await panel.getByTestId('led').getAttribute('data-source');
+      expect(off === 'off', `after pause the source was ${off}`);
+      await page.locator('body').click({ position: { x: 700, y: 500 } });
+      await page.keyboard.press('a');
+      await panel.getByRole('button', { name: 'Pause' }).waitFor();
+      await page.keyboard.press('a');
+      await panel.getByRole('button', { name: 'Play' }).waitFor();
+    });
+  },
 };
 
 // --- run -------------------------------------------------------------------

@@ -1,5 +1,7 @@
 import type { UiState } from '../store/ui';
 import type { ThemeId } from '../types';
+import { AUDIO_TRACKS } from './audio/tracks';
+import type { TrackId } from './audio/tracks';
 
 export type CommandGroup = 'Document' | 'View' | 'Audio' | 'Music' | 'Storage';
 
@@ -11,6 +13,9 @@ export interface CommandDeps {
   openDocument?(id: string): void;
   /** Starts the confirmed "delete everything" flow. */
   requestClear?(): void;
+  /** The built-in ambient sound. */
+  audio?: { toggle(): void; setTrack(id: TrackId): void };
+  sleep?: { set(minutes: 0 | 15 | 30 | 60): void };
 }
 
 const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
@@ -21,7 +26,7 @@ const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
 ];
 
 /** The static command list for the palette. Later features append their own. */
-export function buildCommands({ ui, tts, documents = [], openDocument, requestClear }: CommandDeps): Command[] {
+export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep }: CommandDeps): Command[] {
   const commands: Command[] = [
     ...(openDocument
       ? documents.map<Command>((doc) => ({
@@ -49,6 +54,29 @@ export function buildCommands({ ui, tts, documents = [], openDocument, requestCl
   ];
   if (tts.supported) {
     commands.push({ id: 'tts', title: 'Read aloud', group: 'Audio', hotkey: 's', keywords: ['speech', 'voice', 'narrate'], run: () => tts.toggle() });
+  }
+  if (audio) {
+    commands.push(
+      { id: 'audio-toggle', title: 'Play or pause ambient sound', group: 'Audio', hotkey: 'a', keywords: ['noise', 'music'], run: () => audio.toggle() },
+      { id: 'audio-panel', title: 'Open ambient sound panel', group: 'Audio', run: () => ui.set('audioOpen', true) },
+      ...AUDIO_TRACKS.map<Command>((track) => ({
+        id: `audio-${track.id}`,
+        title: `Ambient sound: ${track.name}`,
+        group: 'Audio',
+        run: () => audio.setTrack(track.id),
+      })),
+    );
+  }
+  if (sleep) {
+    commands.push(
+      ...([15, 30, 60] as const).map<Command>((minutes) => ({
+        id: `sleep-${minutes}`,
+        title: `Sleep timer: ${minutes} minutes`,
+        group: 'Audio',
+        run: () => sleep.set(minutes),
+      })),
+      { id: 'sleep-off', title: 'Sleep timer: off', group: 'Audio', run: () => sleep.set(0) },
+    );
   }
   if (requestClear) {
     commands.push({ id: 'clear', title: 'Clear cache', group: 'Storage', keywords: ['delete', 'library', 'storage', 'remove'], run: () => requestClear() });
