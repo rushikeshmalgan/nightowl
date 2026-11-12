@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createRef } from 'react';
 import * as pdf from '../lib/pdf';
 import { PDF_PAGE_GAP, PdfViewer } from './PdfViewer';
@@ -22,9 +22,20 @@ function makeHandle(numPages = 5) {
 
 const data = new ArrayBuffer(8);
 let clientHeight: ReturnType<typeof vi.spyOn>;
+let lastHandle: ReturnType<typeof makeHandle>;
+
+/**
+ * Waits until the pages are laid out and the viewer's post-layout effect has
+ * run (it restores the scroll position, reports progress and starts drawing).
+ */
+async function pagesReady() {
+  await screen.findAllByTestId('pdf-page');
+  await waitFor(() => expect(lastHandle.renderPage).toHaveBeenCalled());
+}
 
 function setup(overrides: Partial<React.ComponentProps<typeof PdfViewer>> = {}) {
   const handle = makeHandle();
+  lastHandle = handle;
   openPdf.mockResolvedValue(handle);
   const ref = createRef<PdfViewerHandle>();
   const onProgress = vi.fn();
@@ -67,14 +78,14 @@ describe('PdfViewer', () => {
 
   it('renders only the pages near the viewport', async () => {
     const { handle } = setup();
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     expect(renderedPages(handle)).toEqual([1, 2, 3]);
     expect(handle.renderTextLayer).toHaveBeenCalledTimes(3);
   });
 
   it('renders later pages as the reader scrolls to them', async () => {
     const { handle } = setup();
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     const scroller = screen.getByTestId('pdf-scroll');
     scroller.scrollTop = STEP * 4;
     fireEvent.scroll(scroller);
@@ -83,7 +94,7 @@ describe('PdfViewer', () => {
 
   it('marks the scroll container for night pages', async () => {
     const { rerender, props, ref } = setup({ nightPages: true });
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     expect(screen.getByTestId('pdf-scroll')).toHaveAttribute('data-night-pages', 'true');
     rerender(<PdfViewer ref={ref} {...props} nightPages={false} />);
     expect(screen.getByTestId('pdf-scroll')).toHaveAttribute('data-night-pages', 'false');
@@ -91,14 +102,14 @@ describe('PdfViewer', () => {
 
   it('jumps to a page', async () => {
     const { ref } = setup();
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     act(() => ref.current?.goToPage(3));
     expect(screen.getByTestId('pdf-scroll').scrollTop).toBe(STEP * 2);
   });
 
   it('clamps page jumps to the document', async () => {
     const { ref } = setup();
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     act(() => ref.current?.goToPage(99));
     expect(screen.getByTestId('pdf-scroll').scrollTop).toBe(STEP * 4);
     act(() => ref.current?.goToPage(0));
@@ -107,7 +118,7 @@ describe('PdfViewer', () => {
 
   it('reports the page count once the document opens', async () => {
     const { props } = setup();
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     expect(props.onProgress).toHaveBeenCalledWith({ page: 1, numPages: 5, scrollTop: 0 });
   });
 
@@ -133,19 +144,19 @@ describe('PdfViewer', () => {
 
   it('restores a saved scroll position', async () => {
     setup({ initialPage: 2, initialScrollTop: 900 });
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     expect(screen.getByTestId('pdf-scroll').scrollTop).toBe(900);
   });
 
   it('opens at a saved page when there is no scroll position', async () => {
     setup({ initialPage: 3, initialScrollTop: 0 });
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     expect(screen.getByTestId('pdf-scroll').scrollTop).toBe(STEP * 2);
   });
 
   it('re-measures pages when the zoom changes', async () => {
     const { handle, rerender, props, ref } = setup();
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     const firstScale = (handle.getPageSize.mock.calls[0] as unknown as [number, number])[1];
     handle.getPageSize.mockClear();
     rerender(<PdfViewer ref={ref} {...props} zoom={200} />);
@@ -166,7 +177,7 @@ describe('PdfViewer', () => {
 
   it('releases the document on unmount', async () => {
     const { handle, unmount } = setup();
-    await screen.findAllByTestId('pdf-page');
+    await pagesReady();
     unmount();
     expect(handle.destroy).toHaveBeenCalled();
   });
