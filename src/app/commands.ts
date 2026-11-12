@@ -16,6 +16,7 @@ export interface CommandDeps {
   /** The built-in ambient sound. */
   audio?: { toggle(): void; setTrack(id: TrackId): void };
   sleep?: { set(minutes: 0 | 15 | 30 | 60): void };
+  openFeedback?(): void;
   /** The music dock. */
   music?: { select(source: 'noise' | 'spotify' | 'youtube' | 'tracks'): void; toggle(): void };
 }
@@ -28,7 +29,7 @@ const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
 ];
 
 /** The static command list for the palette. Later features append their own. */
-export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music }: CommandDeps): Command[] {
+export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music, openFeedback }: CommandDeps): Command[] {
   const commands: Command[] = [
     ...(openDocument
       ? documents.map<Command>((doc) => ({
@@ -90,6 +91,9 @@ export function buildCommands({ ui, tts, documents = [], openDocument, requestCl
         ['tracks', 'My Tracks'],
       ] as const).map<Command>(([id, label]) => ({ id: `music-${id}`, title: `Switch to ${label}`, group: 'Music', run: () => music.select(id) })),
     );
+  }
+  if (openFeedback) {
+    commands.push({ id: 'feedback', title: 'Report a problem or send feedback', group: 'View', keywords: ['bug', 'email', 'contact', 'help'], run: () => openFeedback() });
   }
   if (requestClear) {
     commands.push({ id: 'clear', title: 'Clear cache', group: 'Storage', keywords: ['delete', 'library', 'storage', 'remove'], run: () => requestClear() });

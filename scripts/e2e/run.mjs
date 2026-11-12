@@ -91,6 +91,21 @@ const groups = {
         expect(text.includes('Local mode'), `badge said "${text}"`);
       });
     }
+    await check('shell', 'the feedback form addresses the owner', async () => {
+      await wake(page);
+      await page.getByRole('button', { name: 'Send feedback' }).click();
+      const panel = page.getByRole('region', { name: 'Feedback' });
+      await panel.getByLabel('Your message').fill('The night pages toggle is great');
+      const hasKey = Boolean(loadEnv(useBuild ? 'production' : 'development', root, 'VITE_').VITE_FEEDBACK_KEY);
+      if (!hasKey) {
+        const href = await panel.getByRole('link', { name: 'Open in your email app' }).getAttribute('href');
+        expect(href?.startsWith('mailto:rushikeshmalgan0090@gmail.com?') && href.includes('night%20pages'), `link was ${href}`);
+      } else {
+        expect(await panel.getByRole('button', { name: 'Send' }).isVisible(), 'no Send button');
+      }
+      await panel.getByRole('button', { name: 'Close feedback' }).click();
+      return hasKey ? 'send mode' : 'email-app mode';
+    });
     await check('shell', 'chrome fades after 3 s of no input and wakes on movement', async () => {
       await page.mouse.move(600, 400);
       await page.waitForTimeout(3500);

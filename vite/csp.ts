@@ -6,7 +6,8 @@ import type { Plugin } from 'vite';
  * no ad, tracking or analytics script can load.
  */
 export function buildCsp(opts: { supabaseUrl?: string }): string {
-  const connect = ["'self'", 'https://open.spotify.com'];
+  // api.web3forms.com delivers readers' feedback by email.
+  const connect = ["'self'", 'https://open.spotify.com', 'https://api.web3forms.com'];
   if (opts.supabaseUrl) {
     let origin: URL;
     try {

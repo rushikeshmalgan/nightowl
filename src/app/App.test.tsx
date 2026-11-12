@@ -59,6 +59,19 @@ describe('App shell', () => {
     expect(within(screen.getByRole('status', { name: 'Document status' })).getByTestId('presence')).toHaveTextContent('Local mode');
   });
 
+  it('opens the feedback form from the rail and the palette', async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
+    expect(await screen.findByRole('region', { name: 'Feedback' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close feedback' }));
+    expect(screen.queryByRole('region', { name: 'Feedback' })).not.toBeInTheDocument();
+    press({ key: 'k', ctrlKey: true });
+    await user.type(screen.getByRole('combobox'), 'report a problem');
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('region', { name: 'Feedback' })).toBeInTheDocument();
+  });
+
   it('has a 48px tool rail', async () => {
     await renderApp();
     expect(screen.getByRole('navigation', { name: 'Tools' })).toHaveClass('w-12');

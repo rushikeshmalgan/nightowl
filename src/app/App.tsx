@@ -1,4 +1,4 @@
-import { Bookmark, ChevronsDown, Library, Music, ScanLine, Search, SlidersHorizontal, Type, Volume2 } from 'lucide-react';
+import { Bookmark, ChevronsDown, Library, MessageSquare, Music, ScanLine, Search, SlidersHorizontal, Type, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AudioPanel } from '../features/audio/AudioPanel';
 import { Chrome } from '../features/shell/Chrome';
@@ -24,6 +24,7 @@ import { useBookmarks } from '../features/reader/useBookmarks';
 import { useHighlights } from '../features/reader/useHighlights';
 import { useHotkeys } from '../features/shell/useHotkeys';
 import { useIdleFade } from '../features/shell/useIdleFade';
+import { FeedbackPanel } from '../features/feedback/FeedbackPanel';
 import { useLocalCache } from '../features/library/useLocalCache';
 import { useMusicPrefs } from '../features/music/useMusicPrefs';
 import { useMusicSource } from '../features/music/useMusicSource';
@@ -57,6 +58,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   const [position, setPosition] = useState<ReaderPosition | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const readerRef = useRef<ReaderHandle>(null);
   const bookmarks = useBookmarks(doc?.id ?? null);
@@ -190,7 +192,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   }, []);
 
   // Panels the reader is actively using should not fade out from under them.
-  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen || ui.audioOpen;
+  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen || ui.audioOpen || feedbackOpen;
   const { idle } = useIdleFade({ enabled: !panelOpen });
 
   const tuningOpenedByHover = useRef(false);
@@ -219,6 +221,11 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
         audio: { toggle: () => void toggleNoise(), setTrack: (id) => void audio.setTrack(id) },
         sleep: { set: sleep.set },
         music: { select: (source) => void chooseMusic(source), toggle: () => void toggleMusic() },
+        openFeedback: () => {
+          useUi.getState().set('libraryOpen', false);
+          useUi.getState().set('audioOpen', false);
+          setFeedbackOpen(true);
+        },
       }),
     [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic],
   );
@@ -238,6 +245,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       pressed: ui.libraryOpen,
       onClick: () => {
         setConfirmClear(false);
+        setFeedbackOpen(false);
         ui.set('audioOpen', false);
         ui.toggle('libraryOpen');
       },
@@ -249,6 +257,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       hotkey: 'a',
       pressed: ui.audioOpen,
       onClick: () => {
+        setFeedbackOpen(false);
         ui.set('libraryOpen', false);
         ui.toggle('audioOpen');
       },
@@ -292,6 +301,17 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       icon: <ChevronsDown {...ICON} />,
       pressed: ui.autoScroll,
       onClick: () => ui.toggle('autoScroll'),
+    },
+    {
+      id: 'feedback',
+      label: 'Send feedback',
+      icon: <MessageSquare {...ICON} />,
+      pressed: feedbackOpen,
+      onClick: () => {
+        ui.set('libraryOpen', false);
+        ui.set('audioOpen', false);
+        setFeedbackOpen((open) => !open);
+      },
     },
     {
       id: 'tuning',
@@ -390,6 +410,10 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
             onTrack={(id) => void audio.setTrack(id)}
             onVolume={audio.setVolume}
           />
+        ) : null}
+
+        {feedbackOpen ? (
+          <FeedbackPanel accessKey={import.meta.env.VITE_FEEDBACK_KEY?.trim() || undefined} online={online} onClose={() => setFeedbackOpen(false)} />
         ) : null}
 
         {/* Hovering the right edge slides the tuning panel out. */}
