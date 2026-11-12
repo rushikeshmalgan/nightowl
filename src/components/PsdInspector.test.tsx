@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as psd from '../lib/psd';
 import type { PsdLayer } from '../lib/psd';
 import * as psdDraw from '../lib/psdDraw';
@@ -41,6 +41,8 @@ const data = new ArrayBuffer(16);
 async function renderParsed(onError = vi.fn()) {
   render(<PsdInspector data={data} onError={onError} />);
   const tree = await screen.findByRole('tree');
+  // The first composite is painted in an effect after the tree appears.
+  await waitFor(() => expect(drawComposite).toHaveBeenCalled());
   return { tree, onError };
 }
 

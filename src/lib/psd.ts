@@ -98,11 +98,19 @@ function toLayer(layer: Layer, id: string): PsdLayer {
   };
 }
 
-/** Reads a PSD into a layer tree. ag-psd keeps file order: the first child is the bottom layer. */
-export function parsePsd(data: ArrayBuffer): ParsedPsd {
-  // First pass: structure only, to check sizes before decoding any bitmap.
+/**
+ * Checks that the bytes are a PSD this app can open, without decoding any
+ * bitmap. Throws if not. Cheap enough to run on every import.
+ */
+export function validatePsd(data: ArrayBuffer): void {
   const outline = readPsd(data, { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
   checkPsdLimits({ width: outline.width, height: outline.height, layerPixels: layerPixels(outline.children) });
+}
+
+/** Reads a PSD into a layer tree. ag-psd keeps file order: the first child is the bottom layer. */
+export function parsePsd(data: ArrayBuffer): ParsedPsd {
+  // Structure and size check first, before decoding any bitmap.
+  validatePsd(data);
 
   const psd = readPsd(data, { useImageData: true, skipCompositeImageData: true, skipThumbnail: true });
   return {

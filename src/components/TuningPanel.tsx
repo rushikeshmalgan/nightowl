@@ -97,6 +97,7 @@ export function TuningPanel({ onMouseLeave }: { onMouseLeave?: () => void }) {
           format={(v) => `${v}%`}
           onChange={(v) => ui.set('contrast', v)}
         />
+        <Toggle label="Night pages (PDF)" pressed={ui.nightPages} onClick={() => ui.toggle('nightPages')} />
       </Section>
 
       <Section title="Type">

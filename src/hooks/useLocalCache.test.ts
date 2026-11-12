@@ -1,12 +1,15 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import * as importPipeline from '../lib/importPipeline';
 import * as library from '../lib/library';
 import type { DocMeta } from '../types';
 import { useLocalCache } from './useLocalCache';
 
 vi.mock('../lib/db', () => ({ db: {} }));
 vi.mock('../lib/library');
+vi.mock('../lib/importPipeline');
 
 const lib = vi.mocked(library);
+const pipeline = vi.mocked(importPipeline);
 const meta = (id: string, size = 10): DocMeta => ({ id, name: `${id}.txt`, type: 'text', size, addedAt: 1, lastOpenedAt: 1 });
 const usage = { documentBytes: 0, trackBytes: 0, usedBytes: null, quotaBytes: null };
 
@@ -29,7 +32,7 @@ describe('useLocalCache', () => {
     const { result } = renderHook(() => useLocalCache());
     await waitFor(() => expect(result.current.ready).toBe(true));
 
-    lib.importDocument.mockResolvedValue({ ok: true, doc: meta('new'), overLimit: false });
+    pipeline.importFileToLibrary.mockResolvedValue({ ok: true, doc: meta('new'), overLimit: false });
     lib.listDocuments.mockResolvedValue([meta('new'), meta('seed')]);
     let outcome: Awaited<ReturnType<typeof result.current.importFile>> | undefined;
     await act(async () => {
@@ -45,7 +48,7 @@ describe('useLocalCache', () => {
     const { result } = renderHook(() => useLocalCache());
     await waitFor(() => expect(result.current.ready).toBe(true));
 
-    lib.importDocument.mockResolvedValue({ ok: false, error: 'File is empty.' });
+    pipeline.importFileToLibrary.mockResolvedValue({ ok: false, error: 'File is empty.' });
     let outcome: Awaited<ReturnType<typeof result.current.importFile>> | undefined;
     await act(async () => {
       outcome = await result.current.importFile(new File([], 'empty.txt'));
@@ -59,7 +62,7 @@ describe('useLocalCache', () => {
     const { result } = renderHook(() => useLocalCache());
     await waitFor(() => expect(result.current.ready).toBe(true));
 
-    lib.importDocument.mockResolvedValue({ ok: true, doc: meta('huge'), overLimit: true });
+    pipeline.importFileToLibrary.mockResolvedValue({ ok: true, doc: meta('huge'), overLimit: true });
     lib.listDocuments.mockResolvedValue([meta('huge')]);
     await act(async () => {
       await result.current.importFile(new File(['x'], 'huge.psd'));

@@ -9,6 +9,8 @@ vi.mock('./lib/library', async () => (await import('./test/fakes')).fakeLibraryM
 vi.mock('./lib/progress', async () => (await import('./test/fakes')).fakeProgressModule);
 vi.mock('./lib/prefs', async () => (await import('./test/fakes')).fakePrefsModule);
 vi.mock('./lib/text', async () => (await import('./test/fakes')).fakeTextModule);
+vi.mock('./lib/importPipeline', async () => (await import('./test/fakes')).fakeImportPipelineModule);
+vi.mock('./lib/pdf', async () => (await import('./test/fakes')).fakePdfModule);
 vi.mock('./lib/highlightStore', async () => (await import('./test/fakes')).fakeHighlightStoreModule);
 
 function press(init: KeyboardEventInit) {

@@ -19,7 +19,7 @@ import { useIdleFade } from './hooks/useIdleFade';
 import { useLocalCache } from './hooks/useLocalCache';
 import { usePrefsSync } from './hooks/usePrefsSync';
 import { useTts } from './hooks/useTts';
-import { buildCommands } from './lib/commands';
+import { buildCommands, pageCommands } from './lib/commands';
 import { useUi } from './store/ui';
 import type { BookmarkRecord, DocMeta, DocRecord } from './types';
 
@@ -156,6 +156,13 @@ export default function App() {
     [tts.supported, tts.toggle, cache.documents, openDoc, requestClear],
   );
 
+  // Typing a page number in the palette offers a jump to that page.
+  const numPages = position?.numPages ?? null;
+  const dynamicCommands = useCallback(
+    (query: string) => pageCommands(query, numPages, (page) => readerRef.current?.goToPage(page)),
+    [numPages],
+  );
+
   const railItems: RailItem[] = [
     {
       id: 'library',
@@ -238,6 +245,7 @@ export default function App() {
         onHighlight={(range) => void highlights.add(range)}
         onText={setDocText}
         onPosition={setPosition}
+        onOpenLibrary={() => ui.set('libraryOpen', true)}
       />
 
       <Chrome idle={idle}>
@@ -312,7 +320,7 @@ export default function App() {
       </Chrome>
 
       <DropOverlay onFiles={(files) => void importFiles(files)} />
-      <CommandPalette open={ui.paletteOpen} onOpenChange={(open) => ui.set('paletteOpen', open)} commands={commands} />
+      <CommandPalette open={ui.paletteOpen} onOpenChange={(open) => ui.set('paletteOpen', open)} commands={commands} dynamic={dynamicCommands} />
       <WarmthOverlay />
     </div>
   );

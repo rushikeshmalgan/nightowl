@@ -2,16 +2,22 @@ import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useHotkeys } from '../hooks/useHotkeys';
+import type { HotkeyMap } from '../hooks/useHotkeys';
 import { useReadingProgress } from '../hooks/useReadingProgress';
 import { isCodeLike } from '../lib/fileTypes';
 import type { TextRange } from '../lib/highlights';
 import { readText } from '../lib/text';
 import { useUi } from '../store/ui';
 import type { DocRecord } from '../types';
+import { ErrorPanel } from './ErrorPanel';
 import { FocusRuler } from './FocusRuler';
+import { PdfViewer } from './PdfViewer';
+import type { PdfProgress, PdfViewerHandle } from './PdfViewer';
+import { PsdInspector } from './PsdInspector';
 import { TextView } from './TextView';
 
 const RULER_STEP = 24;
+const STORAGE_READ_ERROR = 'This document could not be read from storage.';
 
 export interface ReaderPosition {
   page: number;
@@ -32,10 +38,15 @@ export interface ReaderCanvasProps {
   /** The plain text of the open document, for reading aloud. Empty when none. */
   onText?(text: string): void;
   onPosition?(position: ReaderPosition): void;
+  /** Offered from the error panel as the way out. */
+  onOpenLibrary?(): void;
   ref?: Ref<ReaderHandle>;
 }
 
-export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition, ref }: ReaderCanvasProps) {
+type Loaded = { docId: string; kind: 'text'; text: string } | { docId: string; kind: 'binary'; data: ArrayBuffer };
+
+/** The reading area: picks the viewer for the open document's type. */
+export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition, onOpenLibrary, ref }: ReaderCanvasProps) {
   const bionic = useUi((s) => s.bionic);
   const dyslexic = useUi((s) => s.dyslexic);
   const fontSize = useUi((s) => s.fontSize);
@@ -46,11 +57,16 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   const focusRuler = useUi((s) => s.focusRuler);
   const autoScroll = useUi((s) => s.autoScroll);
   const scrollSpeed = useUi((s) => s.scrollSpeed);
+  const nightPages = useUi((s) => s.nightPages);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [rulerY, setRulerY] = useState(250);
-  const [loaded, setLoaded] = useState<{ docId: string; text: string } | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pdfRef = useRef<PdfViewerHandle>(null);
+  const pdfPage = useRef(1);
   const restoredFor = useRef<string | null>(null);
+
+  const [rulerY, setRulerY] = useState(250);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [failure, setFailure] = useState<{ docId: string; message: string } | null>(null);
 
   const docId = doc?.id ?? null;
   const progress = useReadingProgress(docId);
@@ -60,38 +76,55 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
 
   useAutoScroll(scrollRef, autoScroll, scrollSpeed);
 
-  // The arrow keys move the ruler only while it is on; otherwise they keep
-  // their normal scrolling behaviour.
-  useHotkeys(
-    focusRuler
-      ? {
-          ArrowUp: () => setRulerY((y) => Math.max(0, y - RULER_STEP)),
-          ArrowDown: () => setRulerY((y) => y + RULER_STEP),
-        }
-      : {},
-  );
+  // Arrow keys: up/down move the focus ruler while it is on, left/right turn
+  // PDF pages. Otherwise they keep their normal scrolling behaviour.
+  const hotkeys: HotkeyMap = {};
+  if (focusRuler) {
+    hotkeys.ArrowUp = () => setRulerY((y) => Math.max(0, y - RULER_STEP));
+    hotkeys.ArrowDown = () => setRulerY((y) => y + RULER_STEP);
+  }
+  if (doc?.type === 'pdf') {
+    hotkeys.ArrowRight = () => pdfRef.current?.goToPage(pdfPage.current + 1);
+    hotkeys.ArrowLeft = () => pdfRef.current?.goToPage(Math.max(1, pdfPage.current - 1));
+  }
+  useHotkeys(hotkeys);
 
-  // Decode text documents.
+  // Load the document's content: decoded text, or the raw bytes for a viewer.
   useEffect(() => {
-    if (!doc || doc.type !== 'text') {
+    setFailure(null);
+    pdfPage.current = 1;
+    if (!doc) {
       setLoaded(null);
       latest.current.onText?.('');
       return;
     }
     let cancelled = false;
-    void readText(doc.blob).then((text) => {
-      if (cancelled) return;
-      setLoaded({ docId: doc.id, text });
-      latest.current.onText?.(text);
-    });
+    const fail = () => {
+      if (!cancelled) setFailure({ docId: doc.id, message: STORAGE_READ_ERROR });
+    };
+    if (doc.type === 'text') {
+      readText(doc.blob).then((text) => {
+        if (cancelled) return;
+        setLoaded({ docId: doc.id, kind: 'text', text });
+        latest.current.onText?.(text);
+      }, fail);
+    } else {
+      latest.current.onText?.('');
+      doc.blob.arrayBuffer().then((data) => {
+        if (!cancelled) setLoaded({ docId: doc.id, kind: 'binary', data });
+      }, fail);
+    }
     return () => {
       cancelled = true;
     };
   }, [doc]);
 
-  const text = loaded && loaded.docId === docId ? loaded.text : null;
+  const current = loaded && loaded.docId === docId ? loaded : null;
+  const text = current?.kind === 'text' ? current.text : null;
+  const data = current?.kind === 'binary' ? current.data : null;
+  const error = failure && failure.docId === docId ? failure.message : null;
 
-  // Put the reader back where they left off, once per document.
+  // Put the reader back where they left off in a text document, once per document.
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !docId || text === null || progress.initial === undefined) return;
@@ -100,7 +133,7 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
     scroller.scrollTop = progress.initial?.scrollTop ?? 0;
   }, [docId, text, progress.initial]);
 
-  const pageOf = (scroller: HTMLElement): ReaderPosition => {
+  const screenOf = (scroller: HTMLElement): ReaderPosition => {
     const viewport = scroller.clientHeight || 1;
     return {
       page: Math.floor(scroller.scrollTop / viewport) + 1,
@@ -108,8 +141,22 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
     };
   };
 
+  const onPdfProgress = (update: PdfProgress) => {
+    pdfPage.current = update.page;
+    progress.save(update.page, update.scrollTop);
+    latest.current.onPosition?.({ page: update.page, numPages: update.numPages });
+  };
+
+  const reportFailure = (message: string) => {
+    if (docId) setFailure({ docId, message });
+  };
+
   useImperativeHandle(ref, () => ({
     goToPage(page: number) {
+      if (doc?.type === 'pdf') {
+        pdfRef.current?.goToPage(page);
+        return;
+      }
       const scroller = scrollRef.current;
       if (!scroller) return;
       scroller.scrollTop = Math.max(0, page - 1) * (scroller.clientHeight || 0);
@@ -127,48 +174,79 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
     },
   }));
 
+  const opening = <p className="mx-auto max-w-[60ch] text-sm text-muted">Opening…</p>;
+  const showPdf = doc?.type === 'pdf' && !error;
+
+  let body: React.ReactNode = null;
+  if (!doc) {
+    body = (
+      <p className="mx-auto max-w-[72ch] text-sm text-muted">
+        Nothing is open. Drop a file here, or press Ctrl K to find a document.
+      </p>
+    );
+  } else if (error) {
+    body = <ErrorPanel message={error} onClear={onOpenLibrary} />;
+  } else if (doc.type === 'psd') {
+    body = data ? <PsdInspector key={doc.id} data={data} zoom={zoom} onError={reportFailure} /> : opening;
+  } else if (doc.type === 'text' && text !== null) {
+    body = (
+      <TextView
+        text={text}
+        mono={isCodeLike(doc.name)}
+        bionic={bionic}
+        dyslexic={dyslexic}
+        fontSize={Math.round((fontSize * zoom) / 100)}
+        lineHeight={lineHeight}
+        highlights={highlights}
+        onHighlight={onHighlight}
+      />
+    );
+  }
+
   return (
     <main
       className="absolute inset-0"
+      style={{ filter: `brightness(${brightness}%) contrast(${contrast}%)` }}
       onMouseMove={(event) => {
         if (!focusRuler) return;
         const rect = event.currentTarget.getBoundingClientRect();
         setRulerY(event.clientY - rect.top);
       }}
     >
-      <div
-        ref={scrollRef}
-        data-testid="reader-scroll"
-        className="h-full overflow-y-auto pl-12 pt-8"
-        style={{ filter: `brightness(${brightness}%) contrast(${contrast}%)` }}
-        onScroll={(event) => {
-          if (!docId || text === null) return;
-          const position = pageOf(event.currentTarget);
-          progress.save(position.page, event.currentTarget.scrollTop);
-          latest.current.onPosition?.(position);
-        }}
-      >
-        <div className="px-6 py-12 md:px-12">
-          {!doc ? (
-            <p className="mx-auto max-w-[72ch] text-sm text-muted">
-              Nothing is open. Drop a file here, or press Ctrl K to find a document.
-            </p>
-          ) : doc.type !== 'text' ? (
-            <p className="mx-auto max-w-[72ch] text-sm text-muted">This file type cannot be shown yet.</p>
-          ) : text !== null ? (
-            <TextView
-              text={text}
-              mono={isCodeLike(doc.name)}
-              bionic={bionic}
-              dyslexic={dyslexic}
-              fontSize={Math.round((fontSize * zoom) / 100)}
-              lineHeight={lineHeight}
-              highlights={highlights}
-              onHighlight={onHighlight}
-            />
-          ) : null}
+      {showPdf ? (
+        data && progress.initial !== undefined ? (
+          <PdfViewer
+            key={doc.id}
+            ref={pdfRef}
+            scrollRef={scrollRef}
+            data={data}
+            initialPage={progress.initial?.page ?? 1}
+            initialScrollTop={progress.initial?.scrollTop ?? 0}
+            zoom={zoom}
+            nightPages={nightPages}
+            onProgress={onPdfProgress}
+            onError={reportFailure}
+          />
+        ) : (
+          <div className="h-full pl-12 pt-8">
+            <div className="px-6 py-12 md:px-12">{opening}</div>
+          </div>
+        )
+      ) : (
+        <div
+          ref={scrollRef}
+          data-testid="reader-scroll"
+          className="h-full overflow-y-auto pl-12 pt-8"
+          onScroll={(event) => {
+            if (!docId || text === null) return;
+            const position = screenOf(event.currentTarget);
+            progress.save(position.page, event.currentTarget.scrollTop);
+            latest.current.onPosition?.(position);
+          }}
+        >
+          <div className="px-6 py-12 md:px-12">{body}</div>
         </div>
-      </div>
+      )}
       {focusRuler ? <FocusRuler y={rulerY} /> : null}
     </main>
   );

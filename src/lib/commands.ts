@@ -42,6 +42,7 @@ export function buildCommands({ ui, tts, documents = [], openDocument, requestCl
     { id: 'bionic', title: 'Toggle bionic reading', group: 'View', hotkey: 'mod+b', run: () => ui.toggle('bionic') },
     { id: 'ruler', title: 'Toggle focus ruler', group: 'View', hotkey: 'f', run: () => ui.toggle('focusRuler') },
     { id: 'autoscroll', title: 'Toggle auto-scroll', group: 'View', run: () => ui.toggle('autoScroll') },
+    { id: 'night-pages', title: 'Toggle night pages', group: 'View', keywords: ['pdf', 'invert', 'dark'], run: () => ui.toggle('nightPages') },
     { id: 'dyslexic', title: 'Toggle dyslexia-friendly font', group: 'View', run: () => ui.toggle('dyslexic') },
     { id: 'tuning', title: 'Open tuning panel', group: 'View', hotkey: '\\', keywords: ['settings', 'warmth', 'brightness'], run: () => ui.set('tuningOpen', true) },
     { id: 'reset', title: 'Reset reading settings', group: 'View', run: () => ui.reset() },
@@ -62,6 +63,17 @@ export interface Command {
   hotkey?: string;
   keywords?: string[];
   run(): void;
+}
+
+/**
+ * Commands that depend on what the reader typed: a whole number within the
+ * open document becomes "Go to page N".
+ */
+export function pageCommands(query: string, numPages: number | null, goTo: (page: number) => void): Command[] {
+  if (numPages === null || !/^\d+$/.test(query)) return [];
+  const page = Number(query);
+  if (page < 1 || page > numPages) return [];
+  return [{ id: `page-${page}`, title: `Go to page ${page}`, group: 'Document', run: () => goTo(page) }];
 }
 
 /** Turns `mod+k` into a label such as `Ctrl K` for display next to a command. */

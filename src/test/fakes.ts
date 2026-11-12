@@ -104,6 +104,20 @@ export const fakeLibraryModule = {
   requestPersistence: async () => false,
 };
 
+/** Validation is skipped in the fake: files go straight into the in-memory library. */
+export const fakeImportPipelineModule = {
+  importFileToLibrary: (db: unknown, file: File) => fakeLibraryModule.importDocument(db, file),
+  prepareImport: async () => ({ ok: true, type: 'text' }),
+};
+
+/** pdf.js needs browser APIs jsdom lacks, so app-level tests never load it. */
+export const fakePdfModule = {
+  openPdf: async () => {
+    throw new Error('pdf.js is not available in jsdom tests');
+  },
+  renderFirstPageThumbnail: async () => new Blob([]),
+};
+
 export const fakeProgressModule = {
   saveProgress: async (_db: unknown, record: ProgressRecord) => {
     state.progress.set(record.docId, record);
