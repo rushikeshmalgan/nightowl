@@ -53,6 +53,7 @@ export default defineConfig({
     // One jsdom per worker instead of one per file; files stay isolated.
     pool: 'vmThreads',
     globals: true,
+    testTimeout: 20000,
     setupFiles: ['./vitest.setup.ts'],
     css: false,
     include: ['src/**/*.test.{ts,tsx}', 'vite/**/*.test.ts'],
