@@ -56,6 +56,14 @@ export function checkPsdLimits(info: { width: number; height: number; layerPixel
   }
 }
 
+export const PSD_UNREADABLE_ERROR = 'This PSD could not be read.';
+
+/** Our own size refusals are already readable; anything else gets a general message. */
+export function describePsdError(err: unknown): string {
+  if (err instanceof Error && err.message.startsWith('This PSD')) return err.message;
+  return PSD_UNREADABLE_ERROR;
+}
+
 function layerPixels(layers: Layer[] | undefined): number {
   let total = 0;
   for (const layer of layers ?? []) {
