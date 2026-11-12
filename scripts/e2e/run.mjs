@@ -9,8 +9,8 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { createServer, preview } from 'vite';
-import { makePdf, makePsd } from './fixtures.mjs';
+import { createServer, loadEnv, preview } from 'vite';
+import { makePdf, makePsd, makeToneWav } from './fixtures.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = 5199;
@@ -84,10 +84,13 @@ const groups = {
       const title = await page.getByTestId('status-title').innerText();
       expect(title.includes('Sleep & Night Ergonomics'), `status title was "${title}"`);
     });
-    await check('shell', 'the reader count shows local mode without Supabase settings', async () => {
-      const text = await page.getByTestId('presence').innerText();
-      expect(text.includes('Local mode'), `badge said "${text}"`);
-    });
+    const env = loadEnv(useBuild ? 'production' : 'development', root, 'VITE_');
+    if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) {
+      await check('shell', 'the reader count shows local mode without Supabase settings', async () => {
+        const text = await page.getByTestId('presence').innerText();
+        expect(text.includes('Local mode'), `badge said "${text}"`);
+      });
+    }
     await check('shell', 'chrome fades after 3 s of no input and wakes on movement', async () => {
       await page.mouse.move(600, 400);
       await page.waitForTimeout(3500);
@@ -299,6 +302,92 @@ const groups = {
       await wake(page);
       await page.getByRole('group', { name: 'Source' }).getByRole('button', { name: 'Night Noise' }).click();
     });
+  },
+
+  async presence(page) {
+    // Only meaningful with the owner's Supabase settings, in a production build.
+    const env = loadEnv('production', root, 'VITE_');
+    if (!useBuild || !env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) return;
+    const badge = (p) => p.getByTestId('presence');
+    await check('presence', 'one tab connects and counts itself', async () => {
+      await page.waitForFunction(() => document.querySelector('[data-testid="presence"]')?.dataset.status === 'online', undefined, {
+        timeout: 20000,
+      });
+      return await badge(page).innerText();
+    });
+    await check('presence', 'a second tab makes it 2 online in both', async () => {
+      const second = await page.context().newPage();
+      await second.goto(page.url());
+      const two = (p) =>
+        p.waitForFunction(() => /^2 online/.test(document.querySelector('[data-testid="presence"]')?.textContent?.trim() ?? ''), undefined, {
+          timeout: 25000,
+        });
+      await Promise.all([two(page), two(second)]);
+      const text = await badge(second).innerText();
+      await second.close();
+      return text;
+    });
+  },
+
+  async offline(page) {
+    const dock = page.getByRole('region', { name: 'Music', exact: true });
+    await check('offline', 'the palette runs a command (theme switch)', async () => {
+      await wake(page);
+      await page.keyboard.press('Control+k');
+      await page.getByRole('combobox').fill('theme: sepia');
+      await page.keyboard.press('Enter');
+      const theme = await page.evaluate(() => document.documentElement.dataset.theme);
+      expect(theme === 'sepia', `theme was ${theme}`);
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
+      await page.keyboard.press('Control+k');
+      await page.getByRole('combobox').fill('theme: night');
+      await page.keyboard.press('Enter');
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
+    });
+    await check('offline', 'an uploaded track is added to My Tracks', async () => {
+      await wake(page);
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      await page.getByRole('tab', { name: 'My Tracks' }).click();
+      await page.getByLabel('Upload tracks').setInputFiles({ name: 'tone.mp3', mimeType: 'audio/mpeg', buffer: makeToneWav() });
+      await page.getByRole('region', { name: 'Browse music' }).getByRole('button', { name: /tone/ }).waitFor();
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+    });
+    if (!useBuild) return;
+    await check('offline', 'with the network off, the app reloads and opens a document', async () => {
+      await page.evaluate(async () => {
+        await navigator.serviceWorker.ready;
+        if (!navigator.serviceWorker.controller) {
+          await new Promise((resolve) => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+        }
+      });
+      await page.context().setOffline(true);
+      await page.reload();
+      // The library loads from IndexedDB after the shell appears.
+      await page
+        .waitForFunction(() => {
+          const title = document.querySelector('[data-testid="status-title"]')?.textContent ?? '';
+          return title !== '' && title !== 'No document';
+        }, undefined, { timeout: 15000 })
+        .catch(() => {});
+      const title = await page.getByTestId('status-title').innerText();
+      expect(title.length > 0 && title !== 'No document', `status title was "${title}"`);
+      return title;
+    });
+    await check('offline', 'the uploaded track plays with the network off', async () => {
+      await wake(page);
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      await page.getByRole('tab', { name: 'My Tracks' }).click();
+      await page.getByRole('region', { name: 'Browse music' }).getByRole('button', { name: /tone/ }).click();
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      await wake(page);
+      await dock.getByRole('button', { name: 'Play' }).click();
+      await dock.getByRole('button', { name: 'Pause' }).waitFor();
+      await page.waitForTimeout(600);
+      const errors = await dock.getByRole('alert').count();
+      expect(errors === 0, 'the dock showed an error');
+      await dock.getByRole('button', { name: 'Pause' }).click();
+    });
+    await page.context().setOffline(false);
   },
 
   async audio(page) {

@@ -38,7 +38,7 @@ function fakeClient() {
       channels.push(created);
       return created;
     }),
-    removeChannel: vi.fn(async () => 'ok'),
+    removeChannel: vi.fn(async (_channel: unknown) => 'ok'),
   };
   return { client: client as unknown as SupabaseClient & typeof client, channels };
 }
@@ -123,6 +123,25 @@ describe('usePresence', () => {
       vi.advanceTimersByTime(6500);
     });
     expect(channels[0].track).toHaveBeenLastCalledWith({ room: 'psd' });
+  });
+
+  it('does not loop when leaving a channel makes it report CLOSED', () => {
+    vi.useFakeTimers();
+    const { client, channels } = fakeClient();
+    // Supabase calls the status callback with CLOSED while removing a channel.
+    client.removeChannel.mockImplementation(async (channel: unknown) => {
+      (channel as { status(s: Status): void }).status('CLOSED');
+      return 'ok';
+    });
+    const { result } = renderHook(() => usePresence('text', { getClient: () => client }));
+    act(() => channels[0].status('SUBSCRIBED'));
+    expect(() =>
+      act(() => {
+        window.dispatchEvent(new Event('offline'));
+      }),
+    ).not.toThrow();
+    expect(result.current.status).toBe('offline');
+    expect(client.removeChannel).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the channel on unmount', () => {

@@ -21,10 +21,14 @@ At the last commit: 531 unit tests pass, typecheck is clean, and `npm run e2e --
 
 **Known limits:** Spotify plays in its own embedded player (play, pause and seek happen there, not in the dock), because Spotify's scripting API needs `eval()`, which the security policy blocks. Without a Spotify login it plays 30-second previews. No Sufi or YouTube preset could be confirmed, so those come from pasted links.
 
+- **Phase 6, Tasks 31–32:** live reader count via Supabase presence (verified live with your project: 1 tab shows "1 online", 2 tabs both show "2 online"), local mode without keys, prototype removed, README written.
+
+**Final check:** 555 unit tests pass, typecheck and build are clean, and `npm run e2e -- --build` passes 34/34 browser checks against the production build with zero CSP violations and no page errors. Covered: real PDF/PSD files, refused corrupt files, idle fade, palette, offline reload, uploaded track playing offline, live Spotify and YouTube embeds, ambient audio, live presence.
+
 ## Next
 
-1. **Task 31:** live reader count (Supabase presence). Needs your Supabase URL and anon key to show real numbers; works offline without them.
-2. **Task 32:** remove the prototype, write the README, final check and review.
+1. A whole-branch code review, then decide whether to merge `feat/nocturne-rebuild` into `main`.
+2. Optional: host `lofi.mp3`, `rain.mp3`, `pink.mp3` and set `VITE_AUDIO_CDN_BASE`; add Sufi or YouTube presets.
 
 ## Resuming
 

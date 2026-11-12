@@ -59,6 +59,8 @@ export default defineConfig(({ mode }) => ({
     testTimeout: 20000,
     setupFiles: ['./vitest.setup.ts'],
     css: false,
+    // Tests run in local mode, whatever is in .env: no live Supabase calls.
+    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
     include: ['src/**/*.test.{ts,tsx}', 'vite/**/*.test.ts'],
   },
 }));

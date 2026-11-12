@@ -40,9 +40,12 @@ export function usePresence(room: Room, deps: { getClient?: () => SupabaseClient
     const key = crypto.randomUUID();
 
     const leave = () => {
-      if (channel) void client.removeChannel(channel);
+      // Forget the channel first: removing it makes Supabase report CLOSED,
+      // which must not be treated as a new failure.
+      const leaving = channel;
       channel = null;
       trackRef.current = null;
+      if (leaving) void client.removeChannel(leaving);
     };
 
     const scheduleRetry = () => {

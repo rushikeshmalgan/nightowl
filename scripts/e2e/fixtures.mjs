@@ -51,6 +51,31 @@ export function makePdf(pageCount, { locked = false } = {}) {
   return Buffer.from(out, 'latin1');
 }
 
+/**
+ * Two seconds of a 440 Hz tone as a WAV file. Browsers sniff audio by its
+ * content, so it plays when uploaded under an .mp3 name, which is enough to
+ * test the upload and offline playback path without an MP3 encoder.
+ */
+export function makeToneWav(seconds = 2, rate = 22050) {
+  const samples = seconds * rate;
+  const buffer = Buffer.alloc(44 + samples * 2);
+  buffer.write('RIFF', 0, 'ascii');
+  buffer.writeUInt32LE(36 + samples * 2, 4);
+  buffer.write('WAVE', 8, 'ascii');
+  buffer.write('fmt ', 12, 'ascii');
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); // PCM
+  buffer.writeUInt16LE(1, 22); // mono
+  buffer.writeUInt32LE(rate, 24);
+  buffer.writeUInt32LE(rate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36, 'ascii');
+  buffer.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i++) buffer.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 12000), 44 + i * 2);
+  return buffer;
+}
+
 function solid(width, height, [r, g, b, a]) {
   const data = new Uint8ClampedArray(width * height * 4);
   for (let i = 0; i < data.length; i += 4) {
