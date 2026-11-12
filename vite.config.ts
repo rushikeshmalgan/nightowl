@@ -26,7 +26,14 @@ export default defineConfig({
       workbox: {
         // The app shell, fonts and (later) the PDF worker are available offline.
         globPatterns: ['**/*.{js,css,html,woff2,mjs,png}'],
+        // pdf.js data files are large and rarely needed: cache them on first use.
+        globIgnores: ['**/pdfjs/**'],
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes('/pdfjs/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'nocturne-pdf-assets', cacheableResponse: { statuses: [0, 200] } },
+          },
           {
             // Streamed ambient audio: once heard, it plays offline.
             urlPattern: ({ url }) => /\.(mp3|aac)$/i.test(url.pathname),

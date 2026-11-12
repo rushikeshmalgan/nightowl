@@ -7,3 +7,4 @@ coverage
 .superpowers
 *.log
 .playwright-mcp
+public/pdfjs
