@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto';
 import { SEED_DOCS } from '../data/seeds';
 import { createDb } from './db';
-import type { NocturneDB } from './db';
+import type { NightOwlDB } from './db';
 import {
   clearAll,
   deleteDocument,
@@ -15,7 +15,7 @@ import {
 } from './library';
 
 let counter = 0;
-let db: NocturneDB;
+let db: NightOwlDB;
 
 function file(name: string, bytes: number): File {
   return new File([new Uint8Array(bytes)], name);

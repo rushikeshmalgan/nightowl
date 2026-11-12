@@ -1,6 +1,6 @@
 import { SEED_DOCS } from '../data/seeds';
 import type { DocMeta, DocRecord } from '../types';
-import type { NocturneDB } from './db';
+import type { NightOwlDB } from './db';
 import { detectDocType } from './fileTypes';
 import { LIMIT_BYTES, planEviction } from './lru';
 
@@ -33,7 +33,7 @@ function isQuotaError(error: unknown): boolean {
   return named.name === 'QuotaExceededError' || named.inner?.name === 'QuotaExceededError';
 }
 
-async function sizesOf(db: NocturneDB): Promise<Array<{ id: string; size: number; lastOpenedAt: number }>> {
+async function sizesOf(db: NightOwlDB): Promise<Array<{ id: string; size: number; lastOpenedAt: number }>> {
   const docs: Array<{ id: string; size: number; lastOpenedAt: number }> = [];
   await db.documents.each((doc) => {
     docs.push({ id: doc.id, size: doc.size, lastOpenedAt: doc.lastOpenedAt });
@@ -48,7 +48,7 @@ async function sizesOf(db: NocturneDB): Promise<Array<{ id: string; size: number
  * retried once.
  */
 export async function importDocument(
-  db: NocturneDB,
+  db: NightOwlDB,
   file: File,
   opts: { thumbnail?: Blob; limitBytes?: number } = {},
 ): Promise<ImportResult> {
@@ -97,13 +97,13 @@ export async function importDocument(
 }
 
 /** Every document's metadata, most recently opened first. */
-export async function listDocuments(db: NocturneDB): Promise<DocMeta[]> {
+export async function listDocuments(db: NightOwlDB): Promise<DocMeta[]> {
   const records = await db.documents.orderBy('lastOpenedAt').reverse().toArray();
   return records.map(toMeta);
 }
 
 /** Loads a document and marks it as just opened. Null if it has been removed. */
-export async function openDocument(db: NocturneDB, id: string): Promise<DocRecord | null> {
+export async function openDocument(db: NightOwlDB, id: string): Promise<DocRecord | null> {
   const record = await db.documents.get(id);
   if (!record) return null;
   const lastOpenedAt = Date.now();
@@ -111,7 +111,7 @@ export async function openDocument(db: NocturneDB, id: string): Promise<DocRecor
   return { ...record, lastOpenedAt };
 }
 
-export async function deleteDocument(db: NocturneDB, id: string): Promise<void> {
+export async function deleteDocument(db: NightOwlDB, id: string): Promise<void> {
   await db.transaction('rw', [db.documents, db.thumbnails, db.progress, db.bookmarks, db.highlights], async () => {
     await db.documents.delete(id);
     await db.thumbnails.where('docId').equals(id).delete();
@@ -122,7 +122,7 @@ export async function deleteDocument(db: NocturneDB, id: string): Promise<void> 
 }
 
 /** Empties the library. Preferences always survive; tracks only go when asked. */
-export async function clearAll(db: NocturneDB, opts: { includeTracks: boolean }): Promise<void> {
+export async function clearAll(db: NightOwlDB, opts: { includeTracks: boolean }): Promise<void> {
   await Promise.all([
     db.documents.clear(),
     db.thumbnails.clear(),
@@ -142,7 +142,7 @@ function browserEstimate(): Estimate | null {
   return () => storage.estimate();
 }
 
-export async function getUsage(db: NocturneDB, estimate?: Estimate): Promise<Usage> {
+export async function getUsage(db: NightOwlDB, estimate?: Estimate): Promise<Usage> {
   let documentBytes = 0;
   let trackBytes = 0;
   await db.documents.each((doc) => {
@@ -187,7 +187,7 @@ export async function requestPersistence(): Promise<boolean> {
  * Adds the sample documents the first time the app runs. A saved flag stops
  * them coming back after the user deletes them.
  */
-export async function seedIfEmpty(db: NocturneDB): Promise<void> {
+export async function seedIfEmpty(db: NightOwlDB): Promise<void> {
   // One transaction for check-and-insert: a second caller (React StrictMode's
   // double effect, or another tab) waits and then sees the flag.
   await db.transaction('rw', [db.documents, db.prefs], async () => {

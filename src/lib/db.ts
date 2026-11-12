@@ -11,7 +11,7 @@ import type {
 } from '../types';
 
 /** The app's IndexedDB database. Only hooks and `lib/` modules may touch it. */
-export class NocturneDB extends Dexie {
+export class NightOwlDB extends Dexie {
   documents!: Table<DocRecord, string>;
   thumbnails!: Table<ThumbnailRecord, [string, number]>;
   progress!: Table<ProgressRecord, string>;
@@ -34,8 +34,8 @@ export class NocturneDB extends Dexie {
   }
 }
 
-export function createDb(name: string): NocturneDB {
-  return new NocturneDB(name);
+export function createDb(name: string): NightOwlDB {
+  return new NightOwlDB(name);
 }
 
-export const db = createDb('nocturne');
+export const db = createDb('nightowl');

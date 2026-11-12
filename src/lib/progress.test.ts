@@ -1,11 +1,11 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { createDb } from './db';
-import type { NocturneDB } from './db';
+import type { NightOwlDB } from './db';
 import { addBookmark, deleteBookmark, getProgress, listBookmarks, saveProgress } from './progress';
 
 let counter = 0;
-let db: NocturneDB;
+let db: NightOwlDB;
 
 beforeEach(() => {
   counter += 1;

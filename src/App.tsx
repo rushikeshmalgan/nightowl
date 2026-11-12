@@ -237,7 +237,7 @@ export default function App() {
   const page = position?.page ?? 1;
 
   return (
-    <div role="application" aria-label="Nocturne Reader" className="relative h-full overflow-hidden bg-canvas text-ink">
+    <div role="application" aria-label="NightOwl Reader" className="relative h-full overflow-hidden bg-canvas text-ink">
       <ReaderCanvas
         ref={readerRef}
         doc={doc}

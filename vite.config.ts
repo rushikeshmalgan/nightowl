@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
-        name: 'Nocturne Reader',
-        short_name: 'Nocturne',
+        name: 'NightOwl Reader',
+        short_name: 'NightOwl',
         description: 'An offline-first night reading app for PDF, PSD and text documents.',
         theme_color: '#090A0F',
         background_color: '#090A0F',
@@ -32,14 +32,14 @@ export default defineConfig({
           {
             urlPattern: ({ url }) => url.pathname.includes('/pdfjs/'),
             handler: 'CacheFirst',
-            options: { cacheName: 'nocturne-pdf-assets', cacheableResponse: { statuses: [0, 200] } },
+            options: { cacheName: 'nightowl-pdf-assets', cacheableResponse: { statuses: [0, 200] } },
           },
           {
             // Streamed ambient audio: once heard, it plays offline.
             urlPattern: ({ url }) => /\.(mp3|aac)$/i.test(url.pathname),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'nocturne-audio',
+              cacheName: 'nightowl-audio',
               rangeRequests: true,
               cacheableResponse: { statuses: [0, 200] },
             },

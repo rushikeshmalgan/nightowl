@@ -1,14 +1,14 @@
-# Nocturne Reader Implementation Plan
+# NightOwl Reader Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rebuild the single-file Nocturne Reader prototype as an offline-first Vite + React + TypeScript app with a redesigned UI, real PDF/PSD parsing, an IndexedDB library, a music dock (Spotify / YouTube / uploaded tracks) and live Supabase presence, all on free tiers.
+**Goal:** Rebuild the single-file NightOwl Reader prototype as an offline-first Vite + React + TypeScript app with a redesigned UI, real PDF/PSD parsing, an IndexedDB library, a music dock (Spotify / YouTube / uploaded tracks) and live Supabase presence, all on free tiers.
 
 **Architecture:** A client-only SPA. Hooks and `src/lib/**` own every side effect (Dexie, Supabase, `AudioContext`, player APIs); components render and dispatch. Music sources sit behind one `MusicAdapter` interface so the dock never knows which source it drives. Presence, streamed audio and embeds degrade to local/offline behaviour.
 
 **Tech Stack:** Vite, React, TypeScript (strict), Tailwind v4, Zustand, Dexie, `pdfjs-dist`, `ag-psd`, `@supabase/supabase-js`, `vite-plugin-pwa`, `cmdk`, `@fontsource` fonts, Vitest + jsdom + `fake-indexeddb` + Testing Library.
 
-**Spec:** `docs/superpowers/specs/2026-11-11-nocturne-reader-design.md`
+**Spec:** `docs/superpowers/specs/@@@-design.md`
 
 ## Global Constraints
 
@@ -26,7 +26,7 @@
 - PSD size warning above 100 MB. Spotify embed ready timeout 8 s. Presence `track()` calls ≥ 6 s apart. Sleep timer 15/30/60 min with a 5 s fade.
 - YouTube: `youtube-nocookie.com` host, `controls: 0`, visible tile ≥ 200×200 while active. Spotify: no volume control, 30-second previews without a Spotify login.
 - Language tags `EN`, `HI`, `INST`, `NATURE`. Categories: English Focus, Hindi / Bollywood Chill, Instrumental & Classical, Nature & White Noise.
-- TypeScript only; no `any` without a one-line comment. Work on branch `feat/nocturne-rebuild`. Data-layer tests start with `// @vitest-environment node` (Node `Blob`/`File` + `fake-indexeddb`); component and hook tests use jsdom. The prototype `nocturne_reader_night_document_platform.tsx` stays untouched until Task 32.
+- TypeScript only; no `any` without a one-line comment. Work on branch `feat/@@@`. Data-layer tests start with `// @vitest-environment node` (Node `Blob`/`File` + `fake-indexeddb`); component and hook tests use jsdom. The prototype `nightowl_reader_night_document_platform.tsx` stays untouched until Task 32.
 
 ## Review Focus
 
@@ -49,9 +49,9 @@
 **Interfaces:**
 - Produces: npm scripts `dev`, `build` (`tsc --noEmit && vite build`), `preview`, `test` (`vitest run`), `typecheck` (`tsc --noEmit`); Vitest default env jsdom with globals and jest-dom; `export default function App()`.
 
-- [ ] **Step 1: Branch and install.** Run `git switch -c feat/nocturne-rebuild`. Write the config files, then install runtime deps `react react-dom zustand dexie pdfjs-dist ag-psd @supabase/supabase-js cmdk lucide-react @fontsource-variable/geist @fontsource-variable/geist-mono @fontsource-variable/newsreader @fontsource/opendyslexic` and dev deps `vite @vitejs/plugin-react typescript tailwindcss @tailwindcss/vite vite-plugin-pwa vitest jsdom fake-indexeddb @testing-library/react @testing-library/user-event @testing-library/jest-dom @types/react @types/react-dom`. Check each font name with `npm view <name> version`; if one does not exist use the `@fontsource/<name>` equivalent. `.env.example` lists the three env vars, empty, with a comment each.
-- [ ] **Step 2: Write the failing test** `src/App.test.tsx`: `render(<App />); expect(screen.getByRole('application', { name: 'Nocturne Reader' })).toBeInTheDocument()`. Run `npx vitest run src/App.test.tsx`. Expected: FAIL (`App` missing).
-- [ ] **Step 3: Implement** `App` rendering `<div role="application" aria-label="Nocturne Reader">`; `main.tsx` mounts it; `index.css` has `@import "tailwindcss";` and imports the four font packages; `vitest.setup.ts` imports `@testing-library/jest-dom/vitest` and polyfills `ResizeObserver` and `Element.prototype.scrollIntoView` (needed by `cmdk`).
+- [ ] **Step 1: Branch and install.** Run `git switch -c feat/@@@`. Write the config files, then install runtime deps `react react-dom zustand dexie pdfjs-dist ag-psd @supabase/supabase-js cmdk lucide-react @fontsource-variable/geist @fontsource-variable/geist-mono @fontsource-variable/newsreader @fontsource/opendyslexic` and dev deps `vite @vitejs/plugin-react typescript tailwindcss @tailwindcss/vite vite-plugin-pwa vitest jsdom fake-indexeddb @testing-library/react @testing-library/user-event @testing-library/jest-dom @types/react @types/react-dom`. Check each font name with `npm view <name> version`; if one does not exist use the `@fontsource/<name>` equivalent. `.env.example` lists the three env vars, empty, with a comment each.
+- [ ] **Step 2: Write the failing test** `src/App.test.tsx`: `render(<App />); expect(screen.getByRole('application', { name: 'NightOwl Reader' })).toBeInTheDocument()`. Run `npx vitest run src/App.test.tsx`. Expected: FAIL (`App` missing).
+- [ ] **Step 3: Implement** `App` rendering `<div role="application" aria-label="NightOwl Reader">`; `main.tsx` mounts it; `index.css` has `@import "tailwindcss";` and imports the four font packages; `vitest.setup.ts` imports `@testing-library/jest-dom/vitest` and polyfills `ResizeObserver` and `Element.prototype.scrollIntoView` (needed by `cmdk`).
 - [ ] **Step 4: Verify.** `npm test`, `npm run typecheck` and `npm run build` all pass.
 - [ ] **Step 5: Commit** `git add -A ':!gemini-code-*'` (this also adds the spec and plan under `docs/`; the two `gemini-code-*.txt` prompt files stay untracked) then `git commit -m "chore: scaffold Vite React TS app, add design spec and plan"`.
 
@@ -125,7 +125,7 @@
 - Test: `src/lib/bionic.test.ts`, `src/lib/text.test.ts` (`// @vitest-environment node`), `src/components/TextView.test.tsx`
 
 **Interfaces:**
-- Produces: `bionicSplit(word: string): { head: string; tail: string }` (head = `ceil(graphemes/2)` grapheme clusters via `Intl.Segmenter`); `readText(blob: Blob): Promise<string>` (UTF-8, strips a leading U+FEFF); `SEED_DOCS: Array<{ name: string; text: string }>` — `Sleep & Night Ergonomics.md` and `Nocturne Engine Specs.txt`, text copied from the prototype's `samples[0]` and `samples[2]`; `TextView(props: { text: string; mono: boolean; bionic: boolean; dyslexic: boolean; fontSize: number; lineHeight: number })`.
+- Produces: `bionicSplit(word: string): { head: string; tail: string }` (head = `ceil(graphemes/2)` grapheme clusters via `Intl.Segmenter`); `readText(blob: Blob): Promise<string>` (UTF-8, strips a leading U+FEFF); `SEED_DOCS: Array<{ name: string; text: string }>` — `Sleep & Night Ergonomics.md` and `NightOwl Engine Specs.txt`, text copied from the prototype's `samples[0]` and `samples[2]`; `TextView(props: { text: string; mono: boolean; bionic: boolean; dyslexic: boolean; fontSize: number; lineHeight: number })`.
 
 - [ ] **Step 1: Write failing tests (Review Focus 1).** `bionicSplit('hello')` → `{head:'hel', tail:'lo'}`; `('a')` → `{head:'a', tail:''}`; for `'नमस्ते'` `head + tail === word` and the grapheme count of `head` equals `ceil(n/2)`. `readText` of UTF-8 bytes for `'नमस्ते दुनिया'` returns that exact string; bytes prefixed `EF BB BF` return no leading `'﻿'`. `TextView` with `bionic` renders one `<strong>` per word whose text is the head; without it renders no `<strong>`; applies inline `font-size` and `line-height`; `mono` switches the `font-mono` class, otherwise the serif class.
 - [ ] **Step 2: Run** `npx vitest run src/lib/bionic.test.ts src/lib/text.test.ts src/components/TextView.test.tsx`. Expected: FAIL.
@@ -163,7 +163,7 @@
 - [ ] **Step 2: Run** `npx vitest run src/App.test.tsx`. Expected: FAIL.
 - [ ] **Step 3: Implement the shell.** The rail holds icon buttons with hotkey hints (Library, Tuning, Audio, Palette, Bionic). `TuningPanel` has a theme picker and Scrubbers: Warmth 2200–6500 step 100 `K`; Brightness 30–120 `%`; Contrast 70–150 `%`; Font size 12–32 `px`; Line spacing 1.2–2.5 step 0.1 `x`; Scroll speed 0.25–3 step 0.05 `x`; Speech rate 0.5–2 step 0.05 `x`; Zoom 60–180 step 10 `%`; plus dyslexic and reset. Panel slides via `transform` on right-edge hover or `\`. All hotkeys from Global Constraints are wired; palette commands cover theme, bionic, ruler, TTS, auto-scroll, tuning, library, audio.
 - [ ] **Step 4: Run** the full suite `npm test`, `npm run typecheck`, `npm run build`. Expected: PASS. Then run `npm run dev` and confirm in a browser the rail, status line and 3-second fade work.
-- [ ] **Step 5: Commit** `feat: Nocturne app shell with redesigned UI`.
+- [ ] **Step 5: Commit** `feat: NightOwl app shell with redesigned UI`.
 
 ---
 
@@ -176,7 +176,7 @@
 - Test: `src/lib/db.test.ts`, `src/lib/lru.test.ts` (both `// @vitest-environment node`, `import 'fake-indexeddb/auto'`)
 
 **Interfaces:**
-- Produces: `class NocturneDB extends Dexie` with tables `documents` (key `id`, index `lastOpenedAt`), `thumbnails` (key `[docId+page]`), `progress` (key `docId`), `bookmarks` (`id`, index `docId`), `highlights` (`id`, index `docId`), `tracks` (`id`), `prefs` (key `key`); `createDb(name: string): NocturneDB`; `db = createDb('nocturne')`; `getPref<T>(key: string, fallback: T): Promise<T>`; `setPref(key: string, value: unknown): Promise<void>`; `LIMIT_BYTES = 500 * 1024 * 1024`; `planEviction(docs: Array<{id:string; size:number; lastOpenedAt:number}>, protectedId: string|null, limitBytes: number): { evictIds: string[]; overLimit: boolean }`.
+- Produces: `class NightOwlDB extends Dexie` with tables `documents` (key `id`, index `lastOpenedAt`), `thumbnails` (key `[docId+page]`), `progress` (key `docId`), `bookmarks` (`id`, index `docId`), `highlights` (`id`, index `docId`), `tracks` (`id`), `prefs` (key `key`); `createDb(name: string): NightOwlDB`; `db = createDb('nightowl')`; `getPref<T>(key: string, fallback: T): Promise<T>`; `setPref(key: string, value: unknown): Promise<void>`; `LIMIT_BYTES = 500 * 1024 * 1024`; `planEviction(docs: Array<{id:string; size:number; lastOpenedAt:number}>, protectedId: string|null, limitBytes: number): { evictIds: string[]; overLimit: boolean }`.
 
 - [ ] **Step 1: Write failing tests.** `db`: all seven tables exist; a stored `Blob` round-trips with the same `size`. `prefs`: `setPref('a',1)` then `getPref('a',0)` is `1`; missing key returns the fallback. `lru`: with docs 3×200 B and limit 500 B the oldest `lastOpenedAt` id is evicted first and nothing else; `[]` when under the limit; `protectedId` is never in `evictIds`; **(Review Focus 3)** one protected doc of 600 B with limit 500 B returns `{ evictIds: [], overLimit: true }`; evicting everything evictable but still over limit returns `overLimit: true`.
 - [ ] **Step 2: Run** `npx vitest run src/lib/db.test.ts src/lib/lru.test.ts`. Expected: FAIL.
@@ -191,7 +191,7 @@
 - Test: `src/lib/fileTypes.test.ts`, `src/lib/library.test.ts` (`// @vitest-environment node`)
 
 **Interfaces:**
-- Consumes: `NocturneDB`, `planEviction`, `LIMIT_BYTES`, `getPref`/`setPref`, `SEED_DOCS`.
+- Consumes: `NightOwlDB`, `planEviction`, `LIMIT_BYTES`, `getPref`/`setPref`, `SEED_DOCS`.
 - Produces: `detectDocType(name: string): DocType|null` (case-insensitive); `ACCEPT_ATTR = '.pdf,.psd,.txt,.md,.json,.csv'`; `isAudioFile(name: string): boolean` (`.mp3`, `.aac`); in `library.ts`: `importDocument(db, file: File, opts?: { thumbnail?: Blob; limitBytes?: number }): Promise<{ok:true; doc: DocMeta; overLimit: boolean} | {ok:false; error: string}>`; `listDocuments(db): Promise<DocMeta[]>` (most recently opened first); `openDocument(db, id): Promise<DocRecord|null>` (updates `lastOpenedAt`); `deleteDocument(db, id): Promise<void>` (also removes thumbnails, progress, bookmarks, highlights); `clearAll(db, opts: {includeTracks: boolean}): Promise<void>` (every table except `prefs`); `Usage {documentBytes:number; trackBytes:number; usedBytes:number|null; quotaBytes:number|null}`; `getUsage(db, estimate?): Promise<Usage>`; `requestPersistence(): Promise<boolean>`; `seedIfEmpty(db): Promise<void>` (inserts `SEED_DOCS` as text documents once; a `seeded` pref stops re-seeding after the user deletes them).
 
 - [ ] **Step 1: Write failing tests.** `detectDocType('A.PDF')==='pdf'`, `('x.md')==='text'`, `('x.docx')===null`; `isAudioFile('a.MP3')`. `importDocument`: rejects `x.docx` with error `'Unsupported file type. Use .pdf, .psd, .txt, .md, .json or .csv.'`; rejects a 0-byte file with `'File is empty.'`; stores a valid file and returns its `DocMeta`; with `limitBytes` 500 and three older 200-byte docs, importing a 200-byte doc evicts the oldest and never the new one; a 600-byte import with limit 500 is kept and returns `overLimit: true`; when `db.documents.add` throws `QuotaExceededError` once it evicts and retries once, and when it throws twice returns `{ok:false, error:'Storage is full. Clear some documents and try again.'}`. `openDocument` returns `null` for a missing id and bumps `lastOpenedAt` otherwise. `deleteDocument` removes related rows. `clearAll({includeTracks:false})` keeps `tracks` and `prefs`; `true` removes tracks. `seedIfEmpty` seeds twice-called once, and does not re-seed after deleting the seeds. `getUsage` sums blob sizes by table. `requestPersistence()` resolves `false` when `navigator.storage` is undefined.
@@ -241,7 +241,7 @@
 **Interfaces:**
 - Produces: a service worker (`dist/sw.js`) and `dist/manifest.webmanifest`; precache covers the shell, fonts and the PDF worker; runtime route for audio files from `VITE_AUDIO_CDN_BASE`: cache-first with range-request support.
 
-- [ ] **Step 1: Configure** `VitePWA({ registerType: 'autoUpdate', manifest: { name: 'Nocturne Reader', short_name: 'Nocturne', theme_color: '#090A0F', background_color: '#090A0F', display: 'standalone', icons: [{src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png'}, {src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png'}] }, workbox: { globPatterns: ['**/*.{js,css,html,woff2,mjs}'], runtimeCaching: [{urlPattern: ({url}) => /\.(mp3|aac)$/i.test(url.pathname), handler: 'CacheFirst', options: {cacheName: 'nocturne-audio', rangeRequests: true, cacheableResponse: {statuses: [0, 200]}}}] } })`; call `requestPersistence()` once in `main.tsx`; generate two simple solid-colour icons.
+- [ ] **Step 1: Configure** `VitePWA({ registerType: 'autoUpdate', manifest: { name: 'NightOwl Reader', short_name: 'NightOwl', theme_color: '#090A0F', background_color: '#090A0F', display: 'standalone', icons: [{src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png'}, {src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png'}] }, workbox: { globPatterns: ['**/*.{js,css,html,woff2,mjs}'], runtimeCaching: [{urlPattern: ({url}) => /\.(mp3|aac)$/i.test(url.pathname), handler: 'CacheFirst', options: {cacheName: 'nightowl-audio', rangeRequests: true, cacheableResponse: {statuses: [0, 200]}}}] } })`; call `requestPersistence()` once in `main.tsx`; generate two simple solid-colour icons.
 - [ ] **Step 2: Verify the build.** `npm run build`. Expected: `dist/sw.js` and `dist/manifest.webmanifest` exist; `dist/sw.js` references `index.html`.
 - [ ] **Step 3: Verify offline** with the Playwright tools: run `npm run preview`, open `http://localhost:4173`, import a `.txt`, await `navigator.serviceWorker.ready`, set the browser context offline, reload. Expected: the app renders and the imported document opens from the library.
 - [ ] **Step 4: Run** `npm test`. Expected: PASS.
@@ -488,7 +488,7 @@
 
 **Interfaces:**
 - Consumes: `AudioEngine`, `AUDIO_TRACKS`, `TrackRecord`, `listTracks`.
-- Produces: `createNoiseAdapter(engine: AudioEngine): MusicAdapter` (id `'noise'`; `load` maps `item.ref` to a `TrackId` and calls `engine.setTrack`; title from `AUDIO_TRACKS`, artist `'Nocturne'`, language `'NATURE'`, `canSeek: false`, `canSetVolume: true`, `canSkip: false`); `createTracksAdapter(engine: AudioEngine, deps?: {createAudio?: () => HTMLAudioElement; createObjectUrl?: (b: Blob) => string; revokeObjectUrl?: (u: string) => void}): MusicAdapter` (id `'tracks'`; queue of `TrackRecord`s; `next`/`previous` move through it; blob tracks play from an object URL, stream tracks from `url`; elements get `crossOrigin='anonymous'` and are attached with `engine.attachElement`; if loading fails CORS, retry without `crossOrigin`, skip `attachElement` and control volume via `element.volume`); `DefaultAdapters {adapters: Record<SourceId, MusicAdapter>; youtube: YouTubeAdapter; spotify: SpotifyAdapter}`; `createDefaultAdapters(): DefaultAdapters`.
+- Produces: `createNoiseAdapter(engine: AudioEngine): MusicAdapter` (id `'noise'`; `load` maps `item.ref` to a `TrackId` and calls `engine.setTrack`; title from `AUDIO_TRACKS`, artist `'NightOwl'`, language `'NATURE'`, `canSeek: false`, `canSetVolume: true`, `canSkip: false`); `createTracksAdapter(engine: AudioEngine, deps?: {createAudio?: () => HTMLAudioElement; createObjectUrl?: (b: Blob) => string; revokeObjectUrl?: (u: string) => void}): MusicAdapter` (id `'tracks'`; queue of `TrackRecord`s; `next`/`previous` move through it; blob tracks play from an object URL, stream tracks from `url`; elements get `crossOrigin='anonymous'` and are attached with `engine.attachElement`; if loading fails CORS, retry without `crossOrigin`, skip `attachElement` and control volume via `element.volume`); `DefaultAdapters {adapters: Record<SourceId, MusicAdapter>; youtube: YouTubeAdapter; spotify: SpotifyAdapter}`; `createDefaultAdapters(): DefaultAdapters`.
 
 - [ ] **Step 1: Write failing tests:** noise `load({ref:'rain'})` calls `engine.setTrack('rain')`, `play()` calls `engine.play()`, state mirrors engine state; tracks adapter loading a blob track calls `createObjectUrl` and starts the element, `dispose()` revokes the URL; a stream track uses its `url`; `next()` at the end of the queue wraps to the first; an `error` event sets `state.error`; after a CORS-style first failure the adapter retries without `crossOrigin` and `attachElement` is not called, and `setVolume(0.3)` sets `element.volume`; attached case routes volume through `engine.setVolume`.
 - [ ] **Step 2: Run** `npx vitest run src/lib/music/noise.test.ts src/lib/music/tracksAdapter.test.ts`. Expected: FAIL.
@@ -545,7 +545,7 @@
 
 - [ ] **Step 1: Write failing tests.** `summarizePresence` with 12 `pdf`, 3 `psd`, 8 `text` keys gives `total 23` and that breakdown; a key with two entries counts once using the latest; `nextBackoffMs(0)===1000`, `(3)===8000`, `(10)===30000`. Throttle (fake timers): three calls within 6 s send one immediately and one trailing call carrying the last room after the gap. Hook (mock channel): no client → `status:'offline'`, `total:null`, no network call; `subscribe` callback `'SUBSCRIBED'` → `'online'` and `track` called with a payload whose keys are exactly `['room']` (no file names); `'CHANNEL_ERROR'`, `'TIMED_OUT'` and `'CLOSED'` each → `'offline'` with a retry scheduled after `nextBackoffMs(0)`; a `window` `offline` event → `'offline'`; a presence `sync` updates `total` and `byRoom`; a room change calls `track` through the throttle. Badge: online shows `23 online · PDF 12 · PSD 3 · Text 8`; offline shows `Local mode`; connecting shows `Connecting…`.
 - [ ] **Step 2: Run** `npx vitest run src/lib/presence.test.ts src/hooks/usePresence.test.ts src/components/PresenceBadge.test.tsx`. Expected: FAIL.
-- [ ] **Step 3: Implement.** One channel `nocturne-presence` with `config: {presence: {key: crypto.randomUUID()}}`; the room comes from the open document's type (`none` when nothing is open); unsubscribe on unmount.
+- [ ] **Step 3: Implement.** One channel `nightowl-presence` with `config: {presence: {key: crypto.randomUUID()}}`; the room comes from the open document's type (`none` when nothing is open); unsubscribe on unmount.
 - [ ] **Step 4: Run** `npm test`, `npm run typecheck`. Without keys the badge shows `Local mode`. With the user's keys, two browser tabs show a total of 2 (manual check).
 - [ ] **Step 5: Commit** `feat: live presence with offline fallback`.
 
@@ -556,10 +556,10 @@
 ### Task 32: Remove prototype, README, final verification
 
 **Files:**
-- Delete: `nocturne_reader_night_document_platform.tsx`
+- Delete: `nightowl_reader_night_document_platform.tsx`
 - Modify: `README.md`, `.env.example`
 
-- [ ] **Step 1: Delete the prototype** with `git rm nocturne_reader_night_document_platform.tsx`; confirm `npm run build` still passes.
+- [ ] **Step 1: Delete the prototype** with `git rm nightowl_reader_night_document_platform.tsx`; confirm `npm run build` still passes.
 - [ ] **Step 2: Write `README.md`:** what the app is; `npm install`, `npm run dev`, `npm test`, `npm run build`; the three env vars; how to create a free Supabase project and where to paste the URL and anon key; how to host audio on Cloudflare R2 (free tier), enable CORS and set `VITE_AUDIO_CDN_BASE`; the hotkeys; the ad-free note stating that ads served inside YouTube or Spotify players are not removed; the Spotify limits (30-second previews without login, no volume control).
 - [ ] **Step 3: Run the full verification.** `npm test`, `npm run typecheck`, `npm run build`: all pass. With the Playwright tools against `npm run preview`, check and record each: seeded documents open; import a generated PDF and PSD; layer toggle changes the composite; the chrome fades at 3 s and wakes on mouse movement; `Ctrl+K` palette opens and runs a command; theme switches; reload offline still opens documents; each music source loads (mocked or real) with zero CSP console messages; an uploaded `.mp3` plays offline.
 - [ ] **Step 4: Report** the verification results to the user, listing what was checked automatically and what still needs the user (live Supabase presence with their keys; real Spotify/YouTube playback).

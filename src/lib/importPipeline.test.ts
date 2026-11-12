@@ -1,7 +1,7 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { createDb } from './db';
-import type { NocturneDB } from './db';
+import type { NightOwlDB } from './db';
 import { importFileToLibrary, prepareImport } from './importPipeline';
 import * as pdf from './pdf';
 import * as psd from './psd';
@@ -18,7 +18,7 @@ const validatePsd = vi.mocked(psd.validatePsd);
 const file = (name: string, bytes = 32) => new File([new Uint8Array(bytes)], name);
 
 let counter = 0;
-let db: NocturneDB;
+let db: NightOwlDB;
 
 beforeEach(() => {
   vi.resetAllMocks();

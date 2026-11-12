@@ -19,7 +19,7 @@ export function makePdf(pageCount, { locked = false } = {}) {
 
   const kids = [];
   for (let i = 1; i <= pageCount; i++) {
-    const stream = `BT /F1 28 Tf 72 700 Td (Page ${i} of ${pageCount}) Tj ET\nBT /F1 14 Tf 72 660 Td (Nocturne end-to-end fixture) Tj ET`;
+    const stream = `BT /F1 28 Tf 72 700 Td (Page ${i} of ${pageCount}) Tj ET\nBT /F1 14 Tf 72 660 Td (NightOwl end-to-end fixture) Tj ET`;
     const content = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
     kids.push(
       add(

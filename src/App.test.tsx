@@ -41,7 +41,7 @@ describe('App shell', () => {
 
   it('renders the application root', async () => {
     await renderApp();
-    expect(screen.getByRole('application', { name: 'Nocturne Reader' })).toBeInTheDocument();
+    expect(screen.getByRole('application', { name: 'NightOwl Reader' })).toBeInTheDocument();
   });
 
   it('has a 48px tool rail', async () => {
@@ -145,9 +145,9 @@ describe('App library', () => {
   it('lists the library and opens another document', async () => {
     await renderApp();
     const library = await openLibrary();
-    fireEvent.click(within(library).getByRole('button', { name: 'Open Nocturne Engine Specs.txt' }));
-    expect(await screen.findByText(/NOCTURNE READER ENGINE/)).toBeInTheDocument();
-    expect(screen.getByTestId('status-title')).toHaveTextContent('Nocturne Engine Specs.txt');
+    fireEvent.click(within(library).getByRole('button', { name: 'Open NightOwl Engine Specs.txt' }));
+    expect(await screen.findByText(/NIGHTOWL READER ENGINE/)).toBeInTheDocument();
+    expect(screen.getByTestId('status-title')).toHaveTextContent('NightOwl Engine Specs.txt');
   });
 
   it('imports a chosen file and opens it', async () => {
@@ -172,8 +172,8 @@ describe('App library', () => {
     await renderApp();
     const library = await openLibrary();
     // Another tab removed it after this list was drawn.
-    state.docs = state.docs.filter((doc) => doc.name !== 'Nocturne Engine Specs.txt');
-    fireEvent.click(within(library).getByRole('button', { name: 'Open Nocturne Engine Specs.txt' }));
+    state.docs = state.docs.filter((doc) => doc.name !== 'NightOwl Engine Specs.txt');
+    fireEvent.click(within(library).getByRole('button', { name: 'Open NightOwl Engine Specs.txt' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('This document is no longer in the library.');
   });
 
@@ -181,7 +181,7 @@ describe('App library', () => {
     await renderApp();
     const library = await openLibrary();
     fireEvent.click(within(library).getByRole('button', { name: 'Remove Sleep & Night Ergonomics.md' }));
-    expect(await screen.findByText(/NOCTURNE READER ENGINE/)).toBeInTheDocument();
+    expect(await screen.findByText(/NIGHTOWL READER ENGINE/)).toBeInTheDocument();
   });
 
   it('offers each document in the palette', async () => {
@@ -190,7 +190,7 @@ describe('App library', () => {
     press({ key: 'k', ctrlKey: true });
     await user.type(screen.getByRole('combobox'), 'engine specs');
     await user.keyboard('{Enter}');
-    expect(await screen.findByText(/NOCTURNE READER ENGINE/)).toBeInTheDocument();
+    expect(await screen.findByText(/NIGHTOWL READER ENGINE/)).toBeInTheDocument();
   });
 
   it('clears the library after confirmation from the palette', async () => {

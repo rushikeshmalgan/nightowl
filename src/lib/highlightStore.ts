@@ -1,8 +1,8 @@
 import type { HighlightRecord } from '../types';
-import type { NocturneDB } from './db';
+import type { NightOwlDB } from './db';
 
 export async function addHighlight(
-  db: NocturneDB,
+  db: NightOwlDB,
   highlight: { docId: string; start: number; end: number; note: string },
 ): Promise<HighlightRecord> {
   if (highlight.end <= highlight.start) throw new Error('Nothing is selected.');
@@ -12,15 +12,15 @@ export async function addHighlight(
 }
 
 /** A document's highlights in reading order. */
-export async function listHighlights(db: NocturneDB, docId: string): Promise<HighlightRecord[]> {
+export async function listHighlights(db: NightOwlDB, docId: string): Promise<HighlightRecord[]> {
   const rows = await db.highlights.where('docId').equals(docId).toArray();
   return rows.sort((a, b) => a.start - b.start);
 }
 
-export async function updateHighlightNote(db: NocturneDB, id: string, note: string): Promise<void> {
+export async function updateHighlightNote(db: NightOwlDB, id: string, note: string): Promise<void> {
   await db.highlights.update(id, { note });
 }
 
-export async function deleteHighlight(db: NocturneDB, id: string): Promise<void> {
+export async function deleteHighlight(db: NightOwlDB, id: string): Promise<void> {
   await db.highlights.delete(id);
 }

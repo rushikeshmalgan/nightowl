@@ -1,9 +1,9 @@
-# Nocturne Reader: build status
+# NightOwl Reader: build status
 
-Updated 2026-11-12. Work is on branch `feat/nocturne-rebuild`; `main` is untouched.
+Updated 2026-11-12. Work is on branch `feat/@@@`; `main` is untouched.
 
-- Spec: `docs/superpowers/specs/2026-11-11-nocturne-reader-design.md`
-- Plan (32 tasks): `docs/superpowers/plans/2026-11-11-nocturne-reader.md`
+- Spec: `docs/superpowers/specs/@@@-design.md`
+- Plan (32 tasks): `docs/superpowers/plans/@@@.md`
 - Method: one task at a time, tests first, one commit per task.
 
 ## Done
@@ -24,6 +24,6 @@ At the last commit: 315 unit tests pass, typecheck is clean, and `npm run e2e` p
 ## Resuming
 
 - Run with `npm install`, then `npm run dev`. Tests: `npm test`. Browser checks: `npm run e2e` (uses the installed Edge or Chrome).
-- A local, git-ignored ledger of per-task results and decisions is at `.superpowers/sdd/2026-11-11-nocturne-reader/progress.md`. If it is missing, go by this file and `git log`.
+- A local, git-ignored ledger of per-task results and decisions is at `.superpowers/sdd/@@@/progress.md`. If it is missing, go by this file and `git log`.
 - Storage tests run in the node environment with `fake-indexeddb`; app-level tests use the in-memory fakes in `src/test/fakes.ts`.
 - Still needed from the owner: Supabase URL and anon key (Task 31); optional audio files and playlist links (Tasks 21, 24).

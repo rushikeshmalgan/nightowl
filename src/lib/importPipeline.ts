@@ -1,5 +1,5 @@
 import type { DocType } from '../types';
-import type { NocturneDB } from './db';
+import type { NightOwlDB } from './db';
 import { detectDocType } from './fileTypes';
 import { EMPTY_FILE_ERROR, importDocument, UNSUPPORTED_TYPE_ERROR } from './library';
 import type { ImportResult } from './library';
@@ -39,7 +39,7 @@ export async function prepareImport(file: File): Promise<PreparedImport> {
 }
 
 /** Validates a file and, only if it is sound, adds it to the library. */
-export async function importFileToLibrary(db: NocturneDB, file: File): Promise<ImportResult> {
+export async function importFileToLibrary(db: NightOwlDB, file: File): Promise<ImportResult> {
   const prepared = await prepareImport(file);
   if (!prepared.ok) return prepared;
   return importDocument(db, file, { thumbnail: prepared.thumbnail });

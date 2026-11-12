@@ -18,8 +18,8 @@ To prevent asthenopia (eyestrain), contrast ratios should be maintained within a
 Visual distraction in dense multi-paragraph documents is mitigated through horizontal line isolation. By dimming peripheral lines, reading speed increases by up to 22% while reducing cognitive fatigue during late-night sessions.`,
   },
   {
-    name: 'Nocturne Engine Specs.txt',
-    text: `[NOCTURNE READER ENGINE v3.0]
+    name: 'NightOwl Engine Specs.txt',
+    text: `[NIGHTOWL READER ENGINE v3.0]
 
 --- SYSTEM CONFIGURATION ---
 + Storage Mode: 100% Offline IndexedDB & LocalCache
