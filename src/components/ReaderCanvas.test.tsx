@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useUi } from '../store/ui';
 import type { DocRecord, ProgressRecord } from '../types';
 import { ReaderCanvas } from './ReaderCanvas';
@@ -61,7 +61,8 @@ describe('ReaderCanvas', () => {
     progress.initial = { docId: 'a', page: 1, scrollTop: 300 };
     render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} />);
     await screen.findByRole('article');
-    expect(screen.getByTestId('reader-scroll').scrollTop).toBe(300);
+    // The position is restored in an effect that runs after the text appears.
+    await waitFor(() => expect(screen.getByTestId('reader-scroll').scrollTop).toBe(300));
   });
 
   it('saves the position while scrolling', async () => {
