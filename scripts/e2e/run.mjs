@@ -315,17 +315,25 @@ const groups = {
       });
       return await badge(page).innerText();
     });
-    await check('presence', 'a second tab makes it 2 online in both', async () => {
+    await check('presence', 'a second tab adds one reader in both tabs', async () => {
+      // Other readers (for example the owner's own open tab) may already be counted.
+      const count = (text) => Number(/^([\d,]+) online/.exec(text.trim())?.[1].replace(/,/g, '') ?? NaN);
+      const before = count(await badge(page).innerText());
       const second = await page.context().newPage();
       await second.goto(page.url());
-      const two = (p) =>
-        p.waitForFunction(() => /^2 online/.test(document.querySelector('[data-testid="presence"]')?.textContent?.trim() ?? ''), undefined, {
-          timeout: 25000,
-        });
-      await Promise.all([two(page), two(second)]);
+      const raised = (p) =>
+        p.waitForFunction(
+          (expected) => {
+            const match = /^([\d,]+) online/.exec(document.querySelector('[data-testid="presence"]')?.textContent?.trim() ?? '');
+            return match !== null && Number(match[1].replace(/,/g, '')) === expected;
+          },
+          before + 1,
+          { timeout: 25000 },
+        );
+      await Promise.all([raised(page), raised(second)]);
       const text = await badge(second).innerText();
       await second.close();
-      return text;
+      return `${before} -> ${count(text)}`;
     });
   },
 

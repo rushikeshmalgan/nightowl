@@ -1,6 +1,6 @@
 /** A scripted music adapter for tests of the source controller and the dock. */
-import { createPlaybackStore, EMPTY_PLAYBACK } from '../lib/music/adapter';
-import type { MusicAdapter, PlaybackState, PlaylistItem, SourceId } from '../lib/music/adapter';
+import { createPlaybackStore, EMPTY_PLAYBACK } from '../features/music/adapter';
+import type { MusicAdapter, PlaybackState, PlaylistItem, SourceId } from '../features/music/adapter';
 
 type Mocked<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => infer R ? T[K] & import('vitest').Mock<(...args: A) => R> : T[K];

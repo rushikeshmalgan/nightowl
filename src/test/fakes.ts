@@ -6,9 +6,9 @@
  * Usage in a test file:
  *   vi.mock('./lib/library', async () => (await import('./test/fakes')).fakeLibraryModule);
  */
-import { SEED_DOCS } from '../data/seeds';
-import { detectDocType } from '../lib/fileTypes';
-import type { BookmarkRecord, DocMeta, DocRecord, HighlightRecord, ProgressRecord } from '../types';
+import { SEED_DOCS } from '../features/library/seeds';
+import { detectDocType } from '../features/library/fileTypes';
+import type { BookmarkRecord, DocMeta, DocRecord, HighlightRecord, ProgressRecord } from '../shared/types';
 
 const texts = new WeakMap<Blob, string>();
 let clock = 1000;

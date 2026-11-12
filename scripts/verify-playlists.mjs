@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'music', 'playlists.ts'), 'utf8');
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'features', 'music', 'playlists.ts'), 'utf8');
 const spotifyIds = [...source.matchAll(/spotify\('([A-Za-z0-9]+)'/g)].map((m) => m[1]);
 const youtubeIds = [...source.matchAll(/youtube\('([A-Za-z0-9_-]+)'/g)].map((m) => m[1]);
 
