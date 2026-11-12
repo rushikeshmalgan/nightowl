@@ -61,6 +61,14 @@ describe('MusicDock', () => {
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
   });
 
+  it("points to Spotify's own controls instead of a play button that cannot work", () => {
+    const m = music({ externalControls: true, canSetVolume: false });
+    setup(m);
+    const play = screen.getByRole('button', { name: 'Play' });
+    expect(play).toBeDisabled();
+    expect(play).toHaveAttribute('title', "Use the Spotify player's own controls.");
+  });
+
   it('disables scrubbing when the source cannot seek', () => {
     setup(music({ canSeek: false }));
     expect(screen.getByRole('slider', { name: 'Position' })).toHaveAttribute('aria-disabled', 'true');

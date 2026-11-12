@@ -154,6 +154,22 @@ describe('createYouTubeAdapter', () => {
     expect(adapter.getState().error).toBeNull();
   });
 
+  it('ignores controls until the player is ready (its methods do not exist yet)', async () => {
+    const adapter = createYouTubeAdapter({ loadYT: async () => fakeYT });
+    adapter.mount(document.createElement('div'));
+    FakePlayer.last = undefined as unknown as FakePlayer;
+    void adapter.load(playlist);
+    await vi.waitFor(() => expect(FakePlayer.last).toBeDefined());
+    // A real YT.Player has no playVideo/pauseVideo before onReady fires.
+    const notReady = FakePlayer.last as unknown as Record<string, unknown>;
+    for (const name of ['playVideo', 'pauseVideo', 'seekTo', 'setVolume', 'nextVideo', 'previousVideo']) notReady[name] = undefined;
+    expect(() => adapter.pause()).not.toThrow();
+    await expect(adapter.play()).resolves.toBeUndefined();
+    expect(() => adapter.seek(5)).not.toThrow();
+    expect(() => adapter.setVolume(0.5)).not.toThrow();
+    expect(() => adapter.next()).not.toThrow();
+  });
+
   it('reports a script that will not load', async () => {
     const adapter = createYouTubeAdapter({ loadYT: async () => Promise.reject(new Error('offline')) });
     adapter.mount(document.createElement('div'));

@@ -1,29 +1,4 @@
-import * as scripts from './loadScript';
-import { createSpotifyAdapter, SPOTIFY_LOAD_ERROR, spotifyWebUrl } from './spotify';
-import type { SpotifyIFrameAPI } from './spotify';
-
-vi.mock('./loadScript', () => ({ loadScript: vi.fn(async () => {}) }));
-
-type Listener = (event: { data: Record<string, unknown> }) => void;
-
-function fakeApi() {
-  const controller = {
-    listeners: new Map<string, Listener>(),
-    addListener: vi.fn((name: string, fn: Listener) => controller.listeners.set(name, fn)),
-    loadUri: vi.fn(),
-    resume: vi.fn(),
-    pause: vi.fn(),
-    seek: vi.fn(),
-    destroy: vi.fn(),
-    emit: (name: string, data: Record<string, unknown> = {}) => controller.listeners.get(name)?.({ data }),
-  };
-  const api = {
-    createController: vi.fn((_el: HTMLElement, _opts: Record<string, unknown>, callback: (c: typeof controller) => void) =>
-      callback(controller),
-    ),
-  };
-  return { api: api as unknown as SpotifyIFrameAPI & typeof api, controller };
-}
+import { createSpotifyAdapter, spotifyEmbedUrl, spotifyWebUrl } from './spotify';
 
 const preset = {
   id: 'x',
@@ -36,70 +11,56 @@ const preset = {
 };
 const meta = vi.fn(async () => ({ title: 'Bollywood Acoustic (oEmbed)', thumbnailUrl: 'https://i.scdn.co/image/abc' }));
 
-async function loaded() {
-  const { api, controller } = fakeApi();
-  const adapter = createSpotifyAdapter({ loadApi: async () => api, fetchMeta: meta });
-  adapter.mount(document.createElement('div'));
-  const loading = adapter.load(preset);
-  await vi.waitFor(() => expect(api.createController).toHaveBeenCalled());
-  controller.emit('ready');
-  await loading;
-  return { adapter, api, controller };
-}
-
 beforeEach(() => {
   meta.mockClear();
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-});
+function mounted() {
+  const host = document.createElement('div');
+  const adapter = createSpotifyAdapter({ fetchMeta: meta });
+  adapter.mount(host);
+  return { adapter, host };
+}
 
 describe('createSpotifyAdapter', () => {
-  it('loads no script until something is loaded', () => {
-    createSpotifyAdapter();
-    expect(scripts.loadScript).not.toHaveBeenCalled();
+  it('adds no third-party script to the page', async () => {
+    const before = document.scripts.length;
+    const { adapter } = mounted();
+    await adapter.load(preset);
+    expect(document.scripts.length).toBe(before);
   });
 
-  it('creates the embed for the item URI at the compact height', async () => {
-    const { api } = await loaded();
-    expect(api.createController).toHaveBeenCalledWith(expect.any(HTMLElement), { uri: 'spotify:playlist:37i9', width: '100%', height: 152 }, expect.any(Function));
+  it("shows Spotify's own embed for the item at the compact height", async () => {
+    const { adapter, host } = mounted();
+    await adapter.load(preset);
+    const frame = host.querySelector('iframe');
+    expect(frame?.src).toBe('https://open.spotify.com/embed/playlist/37i9?theme=0');
+    expect(frame?.height).toBe('152');
+    expect(frame?.getAttribute('allow')).toContain('encrypted-media');
+    expect(frame?.title).toBe('Spotify player: Bollywood Acoustic');
   });
 
-  it('loads a later item into the same embed', async () => {
-    const { adapter, api, controller } = await loaded();
-    await adapter.load({ ...preset, ref: 'spotify:playlist:other' });
-    expect(controller.loadUri).toHaveBeenCalledWith('spotify:playlist:other');
-    expect(api.createController).toHaveBeenCalledTimes(1);
+  it('reuses the same embed for the next item', async () => {
+    const { adapter, host } = mounted();
+    await adapter.load(preset);
+    await adapter.load({ ...preset, ref: 'spotify:album:abc', title: 'Album' });
+    expect(host.querySelectorAll('iframe')).toHaveLength(1);
+    expect(host.querySelector('iframe')?.src).toBe('https://open.spotify.com/embed/album/abc?theme=0');
   });
 
-  it('drives the embed', async () => {
-    const { adapter, controller } = await loaded();
+  it("leaves playback to Spotify's own controls", async () => {
+    const { adapter } = mounted();
+    await adapter.load(preset);
+    expect(adapter.getState()).toMatchObject({ externalControls: true, canSeek: false, canSetVolume: false, canSkip: false });
     await adapter.play();
-    expect(controller.resume).toHaveBeenCalled();
     adapter.pause();
-    expect(controller.pause).toHaveBeenCalled();
-    adapter.seek(40);
-    expect(controller.seek).toHaveBeenCalledWith(40);
-  });
-
-  it('turns playback updates into seconds', async () => {
-    const { adapter, controller } = await loaded();
-    controller.emit('playback_update', { position: 5000, duration: 30000, isPaused: false, isBuffering: false });
-    expect(adapter.getState()).toMatchObject({ position: 5, duration: 30, isPlaying: true, loading: false });
-    controller.emit('playback_update', { position: 6000, duration: 30000, isPaused: true, isBuffering: false });
-    expect(adapter.getState().isPlaying).toBe(false);
-  });
-
-  it('cannot set the volume or skip', async () => {
-    const { adapter } = await loaded();
-    expect(adapter.getState()).toMatchObject({ canSetVolume: false, canSkip: false, canSeek: true });
     adapter.setVolume(0.2);
     expect(adapter.getState().volume).toBe(1);
   });
 
   it('takes the title and cover from oEmbed and the artist from the preset', async () => {
-    const { adapter } = await loaded();
+    const { adapter } = mounted();
+    await adapter.load(preset);
     await vi.waitFor(() => expect(adapter.getState().artUrl).toBe('https://i.scdn.co/image/abc'));
     expect(adapter.getState()).toMatchObject({ title: 'Bollywood Acoustic (oEmbed)', artist: 'Spotify', language: 'HI' });
     expect(meta).toHaveBeenCalledWith('https://open.spotify.com/playlist/37i9');
@@ -107,25 +68,34 @@ describe('createSpotifyAdapter', () => {
 
   it('keeps the preset title when oEmbed fails', async () => {
     meta.mockRejectedValueOnce(new Error('offline'));
-    const { adapter } = await loaded();
+    const { adapter } = mounted();
+    await adapter.load(preset);
     await new Promise((r) => setTimeout(r, 0));
     expect(adapter.getState().title).toBe('Bollywood Acoustic');
   });
 
-  it("says Spotify didn't load when the embed never gets ready", async () => {
-    vi.useFakeTimers();
-    const { api } = fakeApi();
-    const adapter = createSpotifyAdapter({ loadApi: async () => api, fetchMeta: meta, readyTimeoutMs: 8000 });
-    adapter.mount(document.createElement('div'));
-    const loading = adapter.load(preset).catch((error: Error) => error.message);
-    await vi.advanceTimersByTimeAsync(8000);
-    expect(await loading).toBe(SPOTIFY_LOAD_ERROR);
-    expect(adapter.getState().error).toBe("Spotify didn't load.");
+  it('refuses a ref that is not a Spotify URI', async () => {
+    const { adapter, host } = mounted();
+    await expect(adapter.load({ ...preset, ref: 'javascript:alert(1)' })).rejects.toThrow('That is not a Spotify link.');
+    expect(host.querySelector('iframe')).toBeNull();
+  });
+
+  it('removes the embed on dispose', async () => {
+    const { adapter, host } = mounted();
+    await adapter.load(preset);
+    adapter.dispose();
+    expect(host.querySelector('iframe')).toBeNull();
   });
 });
 
-describe('spotifyWebUrl', () => {
+describe('Spotify URLs', () => {
   it('turns a URI into an open.spotify.com link', () => {
     expect(spotifyWebUrl('spotify:playlist:37i9')).toBe('https://open.spotify.com/playlist/37i9');
+  });
+
+  it('turns a URI into an embed URL, or null for anything else', () => {
+    expect(spotifyEmbedUrl('spotify:track:xyz')).toBe('https://open.spotify.com/embed/track/xyz?theme=0');
+    expect(spotifyEmbedUrl('spotify:playlist:../../x')).toBeNull();
+    expect(spotifyEmbedUrl('https://evil.example')).toBeNull();
   });
 });

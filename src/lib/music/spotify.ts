@@ -1,30 +1,11 @@
 import { createPlaybackStore, EMPTY_PLAYBACK } from './adapter';
-import type { MusicAdapter, PlaylistItem } from './adapter';
-import { loadScript } from './loadScript';
+import type { MusicAdapter } from './adapter';
 import { fetchSpotifyMeta } from './spotifyOembed';
-
-/** The parts of Spotify's embed iFrame API this adapter uses. */
-interface EmbedController {
-  addListener(event: string, listener: (event: { data: Record<string, unknown> }) => void): void;
-  loadUri(uri: string): void;
-  resume(): void;
-  pause(): void;
-  seek(seconds: number): void;
-  destroy(): void;
-}
-
-export interface SpotifyIFrameAPI {
-  createController(
-    element: HTMLElement,
-    options: { uri: string; width: string; height: number },
-    callback: (controller: EmbedController) => void,
-  ): void;
-}
 
 export type SpotifyAdapter = MusicAdapter & { mount(element: HTMLElement): void };
 
-export const SPOTIFY_LOAD_ERROR = "Spotify didn't load.";
-const API_URL = 'https://open.spotify.com/embed/iframe-api/v1';
+export const SPOTIFY_LINK_ERROR = 'That is not a Spotify link.';
+const URI = /^spotify:(playlist|album|track|episode|show|artist):([A-Za-z0-9]+)$/;
 
 /** `spotify:playlist:ID` to `https://open.spotify.com/playlist/ID`. */
 export function spotifyWebUrl(uri: string): string {
@@ -32,78 +13,23 @@ export function spotifyWebUrl(uri: string): string {
   return `https://open.spotify.com/${kind}/${id}`;
 }
 
-async function loadSpotifyApi(): Promise<SpotifyIFrameAPI> {
-  const scope = window as unknown as { onSpotifyIframeApiReady?: (api: SpotifyIFrameAPI) => void; __spotifyApi?: SpotifyIFrameAPI };
-  if (scope.__spotifyApi) return scope.__spotifyApi;
-  const ready = new Promise<SpotifyIFrameAPI>((resolve) => {
-    scope.onSpotifyIframeApiReady = (api) => {
-      scope.__spotifyApi = api;
-      resolve(api);
-    };
-  });
-  await loadScript(API_URL);
-  return ready;
+/** The embed address for a Spotify URI, or null if it is not one. */
+export function spotifyEmbedUrl(uri: string): string | null {
+  const match = URI.exec(uri);
+  return match ? `https://open.spotify.com/embed/${match[1]}/${match[2]}?theme=0` : null;
 }
 
 /**
- * Plays Spotify through its official embed. The embed is the playback
- * surface, so it stays on screen while Spotify is active. Spotify's embed
- * offers no volume or skip control; without a Spotify login it plays
- * 30-second previews.
+ * Shows Spotify's own embedded player. Spotify's scripting API runs eval(),
+ * which this app's Content-Security-Policy forbids, so no Spotify script is
+ * loaded: the embed is a plain frame and the reader uses its controls for
+ * play, pause and seeking. Without a Spotify login it plays 30-second previews.
  */
-export function createSpotifyAdapter(
-  deps: { loadApi?: () => Promise<SpotifyIFrameAPI>; fetchMeta?: typeof fetchSpotifyMeta; readyTimeoutMs?: number } = {},
-): SpotifyAdapter {
-  const loadApi = deps.loadApi ?? loadSpotifyApi;
+export function createSpotifyAdapter(deps: { fetchMeta?: typeof fetchSpotifyMeta } = {}): SpotifyAdapter {
   const fetchMeta = deps.fetchMeta ?? fetchSpotifyMeta;
-  const readyTimeoutMs = deps.readyTimeoutMs ?? 8000;
-  const store = createPlaybackStore({ ...EMPTY_PLAYBACK, canSeek: true, canSetVolume: false, canSkip: false });
-
+  const store = createPlaybackStore({ ...EMPTY_PLAYBACK, externalControls: true });
   let host: HTMLElement | null = null;
-  let controller: EmbedController | null = null;
-
-  const describe = (item: PlaylistItem) => {
-    void fetchMeta(spotifyWebUrl(item.ref)).then(
-      (meta) => store.set({ title: meta.title || item.title, artUrl: meta.thumbnailUrl }),
-      () => {
-        // Keep the preset's own title.
-      },
-    );
-  };
-
-  const createEmbed = async (item: PlaylistItem): Promise<void> => {
-    let api: SpotifyIFrameAPI;
-    try {
-      api = await loadApi();
-    } catch {
-      store.set({ error: SPOTIFY_LOAD_ERROR, loading: false });
-      throw new Error(SPOTIFY_LOAD_ERROR);
-    }
-    const target = document.createElement('div');
-    host?.replaceChildren(target);
-
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        store.set({ error: SPOTIFY_LOAD_ERROR, loading: false });
-        reject(new Error(SPOTIFY_LOAD_ERROR));
-      }, readyTimeoutMs);
-      api.createController(target, { uri: item.ref, width: '100%', height: 152 }, (created) => {
-        controller = created;
-        created.addListener('ready', () => {
-          clearTimeout(timer);
-          resolve();
-        });
-        created.addListener('playback_update', ({ data }) => {
-          store.set({
-            position: Number(data.position ?? 0) / 1000,
-            duration: Number(data.duration ?? 0) / 1000,
-            isPlaying: data.isPaused === false,
-            loading: data.isBuffering === true,
-          });
-        });
-      });
-    });
-  };
+  let frame: HTMLIFrameElement | null = null;
 
   return {
     id: 'spotify',
@@ -111,31 +37,42 @@ export function createSpotifyAdapter(
       host = element;
     },
     async load(item) {
-      store.set({ title: item.title, artist: item.artist, language: item.language, artUrl: null, error: null, loading: true, position: 0, duration: 0 });
-      describe(item);
-      if (controller) controller.loadUri(item.ref);
-      else await createEmbed(item);
-      store.set({ loading: false });
+      const src = spotifyEmbedUrl(item.ref);
+      if (!src) {
+        store.set({ error: SPOTIFY_LINK_ERROR });
+        throw new Error(SPOTIFY_LINK_ERROR);
+      }
+      if (!frame) {
+        frame = document.createElement('iframe');
+        frame.width = '100%';
+        frame.height = '152';
+        frame.setAttribute('allow', 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture');
+        frame.loading = 'lazy';
+        frame.style.border = '0';
+        host?.replaceChildren(frame);
+      }
+      frame.title = `Spotify player: ${item.title}`;
+      frame.src = src;
+      store.set({ title: item.title, artist: item.artist, language: item.language, artUrl: null, error: null });
+      void fetchMeta(spotifyWebUrl(item.ref)).then(
+        (meta) => store.set({ title: meta.title || item.title, artUrl: meta.thumbnailUrl }),
+        () => {
+          // Keep the preset's own title.
+        },
+      );
     },
-    async play() {
-      controller?.resume();
-    },
-    pause() {
-      controller?.pause();
-    },
-    seek(seconds) {
-      controller?.seek(seconds);
-    },
-    setVolume() {
-      // Spotify's embed has no volume control; its own player sets it.
-    },
+    // Playback happens inside Spotify's player.
+    async play() {},
+    pause() {},
+    seek() {},
+    setVolume() {},
     next() {},
     previous() {},
     getState: () => store.get(),
     subscribe: (listener) => store.subscribe(listener),
     dispose() {
-      controller?.destroy();
-      controller = null;
+      frame?.remove();
+      frame = null;
     },
   };
 }

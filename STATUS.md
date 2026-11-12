@@ -15,12 +15,16 @@ Updated 2026-11-12. Work is on branch `feat/@@@`; `main` is untouched.
 
 - **Phase 4, Tasks 20–22:** ambient audio engine (Lo-Fi, Rain, Pink Noise synthesized in the browser, optional streamed files with fallback), sleep timer with fade, audio panel with live waveform and LED, `A` and `Ctrl/Cmd+M` hotkeys.
 
-At the last commit: 392 unit tests pass, typecheck is clean, and `npm run e2e` passes 22 checks in a real browser (real PDF and PSD files, real audio).
+- **Phase 5, Tasks 23–30:** music dock along the bottom with four sources (Night Noise, Spotify, YouTube, My Tracks), category tabs (English Focus, Hindi / Bollywood Chill, Instrumental & Classical, Nature & White Noise), pasted Spotify/YouTube links, uploaded .mp3/.aac and https streams, shared sleep timer, and a strict Content-Security-Policy (no ad, tracking or analytics scripts can load).
+
+At the last commit: 531 unit tests pass, typecheck is clean, and `npm run e2e -- --build` passes 28 checks against the production build with zero CSP violations, including live Spotify and YouTube embeds.
+
+**Known limits:** Spotify plays in its own embedded player (play, pause and seek happen there, not in the dock), because Spotify's scripting API needs `eval()`, which the security policy blocks. Without a Spotify login it plays 30-second previews. No Sufi or YouTube preset could be confirmed, so those come from pasted links.
 
 ## Next
 
-1. **Tasks 23–30:** music dock (Spotify, YouTube, uploaded tracks) and CSP.
-2. **Task 31:** presence. **Task 32:** remove the prototype, write the README, final check.
+1. **Task 31:** live reader count (Supabase presence). Needs your Supabase URL and anon key to show real numbers; works offline without them.
+2. **Task 32:** remove the prototype, write the README, final check and review.
 
 ## Resuming
 

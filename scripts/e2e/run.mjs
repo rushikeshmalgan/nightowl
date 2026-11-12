@@ -9,12 +9,14 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { createServer } from 'vite';
+import { createServer, preview } from 'vite';
 import { makePdf, makePsd } from './fixtures.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = 5199;
-const wanted = process.argv.slice(2);
+// --build runs against the production build (with its Content-Security-Policy).
+const useBuild = process.argv.includes('--build');
+const wanted = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 const results = [];
 
 function record(group, name, ok, detail = '') {
@@ -271,6 +273,30 @@ const groups = {
     });
   },
 
+  async players(page) {
+    const dock = page.getByRole('region', { name: 'Music', exact: true });
+    await check('players', 'a Spotify preset loads the official embed', async () => {
+      await wake(page);
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      await page.getByRole('tab', { name: 'Instrumental & Classical' }).click();
+      await page.getByRole('region', { name: 'Browse music' }).getByRole('button', { name: /Peaceful Piano/ }).click();
+      await page.waitForSelector('[data-testid="spotify-embed"] iframe[src*="open.spotify.com"]', { timeout: 20000 });
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+    });
+    await check('players', 'a pasted YouTube link loads the privacy-enhanced player in a visible tile', async () => {
+      await wake(page);
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      await page.getByLabel('Paste a Spotify or YouTube link').fill('https://www.youtube.com/watch?v=jfKfPfyJRdk');
+      await page.getByRole('button', { name: 'Add link' }).click();
+      await page.waitForSelector('[data-testid="yt-tile"] iframe[src*="youtube-nocookie.com"]', { timeout: 20000 });
+      const box = await page.getByTestId('yt-tile').boundingBox();
+      expect(box && box.width >= 200 && box.height >= 200, `tile was ${box?.width}x${box?.height}`);
+      await dock.getByRole('button', { name: 'Browse music' }).click();
+      await wake(page);
+      await page.getByRole('group', { name: 'Source' }).getByRole('button', { name: 'Night Noise' }).click();
+    });
+  },
+
   async audio(page) {
     const panel = page.getByRole('region', { name: 'Ambient sound' });
     const level = () => panel.getByTestId('led').evaluate((el) => Number(el.dataset.level));
@@ -338,8 +364,11 @@ const groups = {
 // --- run -------------------------------------------------------------------
 
 spawnSync(process.execPath, [join(root, 'scripts', 'copy-pdf-assets.mjs')], { stdio: 'ignore' });
-const server = await createServer({ root, logLevel: 'error', server: { port: PORT, strictPort: true } });
-await server.listen();
+const server = useBuild
+  ? await preview({ root, logLevel: 'error', preview: { port: PORT, strictPort: true } })
+  : await createServer({ root, logLevel: 'error', server: { port: PORT, strictPort: true } });
+if (!useBuild) await server.listen();
+const cspViolations = [];
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await context.newPage();
@@ -353,6 +382,7 @@ const pageErrors = [];
 const consoleErrors = [];
 page.on('pageerror', (error) => pageErrors.push(String(error).slice(0, 200)));
 page.on('console', (message) => {
+  if (/Content Security Policy/i.test(message.text())) cspViolations.push(message.text().slice(0, 240));
   if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200));
 });
 
@@ -370,6 +400,8 @@ try {
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
+if (cspViolations.length > 0) console.log(`CSP violations:\n  ${[...new Set(cspViolations)].join('\n  ')}`);
+else if (useBuild) console.log('No Content Security Policy violations.');
 if (pageErrors.length > 0) console.log(`Uncaught page errors:\n  ${[...new Set(pageErrors)].join('\n  ')}`);
 if (consoleErrors.length > 0) console.log(`Console errors:\n  ${[...new Set(consoleErrors)].slice(0, 8).join('\n  ')}`);
-process.exit(failed.length > 0 || pageErrors.length > 0 ? 1 : 0);
+process.exit(failed.length > 0 || pageErrors.length > 0 || cspViolations.length > 0 ? 1 : 0);

@@ -30,6 +30,8 @@ export interface PlaybackState {
   canSeek: boolean;
   canSetVolume: boolean;
   canSkip: boolean;
+  /** True when the source has its own on-screen controls the dock cannot drive (Spotify). */
+  externalControls: boolean;
   error: string | null;
 }
 
@@ -61,6 +63,7 @@ export const EMPTY_PLAYBACK: PlaybackState = {
   canSeek: false,
   canSetVolume: false,
   canSkip: false,
+  externalControls: false,
   error: null,
 };
 

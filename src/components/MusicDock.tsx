@@ -169,7 +169,14 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
           <button type="button" aria-label="Previous" disabled={!state.canSkip} onClick={music.previous} className={button}>
             <SkipBack size={14} strokeWidth={1.75} />
           </button>
-          <button type="button" aria-label={state.isPlaying ? 'Pause' : 'Play'} onClick={() => void music.toggle()} className={button}>
+          <button
+            type="button"
+            aria-label={state.isPlaying ? 'Pause' : 'Play'}
+            disabled={state.externalControls}
+            title={state.externalControls ? "Use the Spotify player's own controls." : undefined}
+            onClick={() => void music.toggle()}
+            className={button}
+          >
             {state.isPlaying ? <Pause size={16} strokeWidth={1.75} /> : <Play size={16} strokeWidth={1.75} />}
           </button>
           <button type="button" aria-label="Next" disabled={!state.canSkip} onClick={music.next} className={button}>

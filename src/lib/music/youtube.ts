@@ -116,7 +116,9 @@ export function createYouTubeAdapter(deps: { loadYT?: () => Promise<YTNamespace>
     host?.replaceChildren(target);
     const isPlaylist = item.kind !== 'video';
     await new Promise<void>((resolve) => {
-      player = new YT.Player(target, {
+      // The player object has no methods until onReady, so it is only
+      // exposed then; controls used earlier are ignored.
+      const created = new YT.Player(target, {
         host: 'https://www.youtube-nocookie.com',
         width: 200,
         height: 200,
@@ -129,7 +131,14 @@ export function createYouTubeAdapter(deps: { loadYT?: () => Promise<YTNamespace>
           origin: window.location.origin,
           ...(isPlaylist ? { listType: 'playlist', list: item.ref } : {}),
         },
-        events: { onReady: () => resolve(), onStateChange, onError },
+        events: {
+          onReady: () => {
+            player = created;
+            resolve();
+          },
+          onStateChange,
+          onError,
+        },
       });
     });
   };

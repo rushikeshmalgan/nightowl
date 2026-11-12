@@ -1,10 +1,13 @@
+import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { cspPlugin } from './vite/csp';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
+    cspPlugin({ supabaseUrl: loadEnv(mode, process.cwd(), 'VITE_').VITE_SUPABASE_URL || undefined }),
     react(),
     tailwindcss(),
     VitePWA({
@@ -58,4 +61,4 @@ export default defineConfig({
     css: false,
     include: ['src/**/*.test.{ts,tsx}', 'vite/**/*.test.ts'],
   },
-});
+}));
