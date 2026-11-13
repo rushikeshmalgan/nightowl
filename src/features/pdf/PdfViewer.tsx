@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Ref, RefObject } from 'react';
 import { openPdf } from './pdf';
 import type { PdfHandle } from './pdf';
-import { describePdfError, pageAtOffset, pageOffsets, visiblePages } from './pdfUtil';
+import { describePdfError, fitToWidth, pageAtOffset, pageOffsets, visiblePages } from './pdfUtil';
+import type { PageLayout } from './pdfUtil';
 
 /** Vertical space between pages, in CSS pixels. */
 export const PDF_PAGE_GAP = 16;
@@ -36,17 +37,23 @@ export interface PdfViewerProps {
   ref?: Ref<PdfViewerHandle>;
 }
 
-interface PageSize {
-  width: number;
-  height: number;
+/** A computed padding in pixels; unset values (and jsdom) give 0. */
+function px(value: string): number {
+  return Number.parseFloat(value) || 0;
 }
 
 /** A continuous-scroll PDF view that draws only the pages near the viewport. */
 export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPages, onProgress, onError, scrollRef, ref }: PdfViewerProps) {
   const [handle, setHandle] = useState<PdfHandle | null>(null);
-  const [layout, setLayout] = useState<{ scale: number; sizes: PageSize[] } | null>(null);
+  /** Page sizes at the zoomed base scale, before fitting to the screen. */
+  const [measured, setMeasured] = useState<PageLayout | null>(null);
+  /** How wide a page may be, in CSS pixels; infinite when it cannot be measured. */
+  const [room, setRoom] = useState<number | null>(null);
+  // On a narrow screen pages shrink to fit the width; where they already fit, nothing changes.
+  const layout = useMemo(() => (measured && room !== null ? fitToWidth(measured, room, BASE_SCALE) : null), [measured, room]);
 
   const ownScroller = useRef<HTMLDivElement | null>(null);
+  const content = useRef<HTMLDivElement | null>(null);
   const canvasEls = useRef(new Map<number, HTMLCanvasElement>());
   const textEls = useRef(new Map<number, HTMLDivElement>());
   const renderedAt = useRef(new Map<number, number>());
@@ -72,7 +79,7 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
     let opened: PdfHandle | null = null;
     restored.current = false;
     setHandle(null);
-    setLayout(null);
+    setMeasured(null);
     openPdf(data).then(
       (next) => {
         if (cancelled) {
@@ -101,7 +108,7 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
       (sizes) => {
         if (cancelled) return;
         renderedAt.current.clear();
-        setLayout({ scale, sizes });
+        setMeasured({ scale, sizes });
       },
       (error: unknown) => {
         if (!cancelled) latest.current.onError(describePdfError(error));
@@ -111,6 +118,28 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
       cancelled = true;
     };
   }, [handle, scale]);
+
+  // The room for a page: the scroller's width minus the rail padding and the page gutter.
+  useLayoutEffect(() => {
+    const scroller = ownScroller.current;
+    if (!scroller) return;
+    const measure = () => {
+      const width = scroller.clientWidth;
+      if (!(width > 0)) {
+        setRoom(Number.POSITIVE_INFINITY);
+        return;
+      }
+      const outer = getComputedStyle(scroller);
+      const inner = content.current ? getComputedStyle(content.current) : null;
+      const padding = px(outer.paddingLeft) + px(outer.paddingRight) + (inner ? px(inner.paddingLeft) + px(inner.paddingRight) : 0);
+      setRoom(Math.max(1, Math.floor(width - padding)));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, []);
 
   /** Draws the pages near the viewport and frees the ones far from it. */
   const renderVisible = useCallback(() => {
@@ -216,7 +245,8 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
       onScroll={onScroll}
     >
       <div
-        className="flex min-w-max flex-col items-center px-6"
+        ref={content}
+        className="flex min-w-max flex-col items-center px-2 sm:px-6"
         style={{ paddingTop: PAD_TOP, paddingBottom: 96, gap: PDF_PAGE_GAP }}
         aria-busy={!layout}
       >

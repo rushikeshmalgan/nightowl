@@ -10,10 +10,10 @@ const openPdf = vi.mocked(pdf.openPdf);
 const PAGE_HEIGHT = 800;
 const STEP = PAGE_HEIGHT + PDF_PAGE_GAP;
 
-function makeHandle(numPages = 5) {
+function makeHandle(numPages = 5, size: (scale: number) => { width: number; height: number } = () => ({ width: 600, height: PAGE_HEIGHT })) {
   return {
     numPages,
-    getPageSize: vi.fn(async () => ({ width: 600, height: PAGE_HEIGHT })),
+    getPageSize: vi.fn(async (_n: number, scale: number) => size(scale)),
     renderPage: vi.fn(async () => {}),
     renderTextLayer: vi.fn(async () => {}),
     destroy: vi.fn(),
@@ -33,8 +33,7 @@ async function pagesReady() {
   await waitFor(() => expect(lastHandle.renderPage).toHaveBeenCalled());
 }
 
-function setup(overrides: Partial<React.ComponentProps<typeof PdfViewer>> = {}) {
-  const handle = makeHandle();
+function setup(overrides: Partial<React.ComponentProps<typeof PdfViewer>> = {}, handle = makeHandle()) {
   lastHandle = handle;
   openPdf.mockResolvedValue(handle);
   const ref = createRef<PdfViewerHandle>();
@@ -65,6 +64,98 @@ beforeEach(() => {
 afterEach(() => {
   clientHeight.mockRestore();
   vi.useRealTimers();
+});
+
+describe('PdfViewer fit to width', () => {
+  // A page that is 520px wide at 100% (400pt at the 1.3 base scale), so a 260px room must halve it.
+  const natural = (scale: number) => ({ width: 400 * scale, height: 600 * scale });
+  let clientWidth: ReturnType<typeof vi.spyOn>;
+  let resizeCallbacks: Array<() => void>;
+
+  beforeEach(() => {
+    resizeCallbacks = [];
+    clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get');
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resizeCallbacks.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+
+  afterEach(() => {
+    clientWidth.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  const pageWidth = () => Number.parseFloat(screen.getAllByTestId('pdf-page')[0].style.width);
+  const resizeTo = (px: number) => {
+    clientWidth.mockReturnValue(px);
+    act(() => resizeCallbacks.forEach((callback) => callback()));
+  };
+
+  it('shrinks pages that are wider than the room so a whole page fits', async () => {
+    clientWidth.mockReturnValue(260);
+    setup({}, makeHandle(5, natural));
+    await pagesReady();
+    expect(pageWidth()).toBeCloseTo(260, 3);
+    const page = screen.getAllByTestId('pdf-page')[0];
+    expect(Number.parseFloat(page.style.height) / pageWidth()).toBeCloseTo(600 / 400, 3);
+  });
+
+  it('leaves pages alone when they already fit', async () => {
+    clientWidth.mockReturnValue(1000);
+    setup({}, makeHandle(5, natural));
+    await pagesReady();
+    expect(pageWidth()).toBeCloseTo(520, 3);
+  });
+
+  it('draws at the fitted scale, not the full one', async () => {
+    clientWidth.mockReturnValue(260);
+    const { handle } = setup({}, makeHandle(5, natural));
+    await pagesReady();
+    const scales = handle.renderPage.mock.calls.map((call) => (call as unknown as [number, unknown, number])[2]);
+    expect(scales.length).toBeGreaterThan(0);
+    // 260px room over a 400px-wide page at scale 1.
+    for (const scale of scales) expect(scale).toBeCloseTo(0.65, 6);
+  });
+
+  it('makes zoom relative to the fit: 200% is twice the fitted width', async () => {
+    clientWidth.mockReturnValue(260);
+    const { rerender, props, ref } = setup({}, makeHandle(5, natural));
+    await pagesReady();
+    expect(pageWidth()).toBeCloseTo(260, 3);
+    rerender(<PdfViewer ref={ref} {...props} zoom={200} />);
+    await waitFor(() => expect(pageWidth()).toBeCloseTo(520, 3));
+  });
+
+  it('refits when the window changes size, as when a phone is rotated', async () => {
+    clientWidth.mockReturnValue(260);
+    setup({}, makeHandle(5, natural));
+    await pagesReady();
+    expect(pageWidth()).toBeCloseTo(260, 3);
+    resizeTo(700);
+    await waitFor(() => expect(pageWidth()).toBeCloseTo(520, 3));
+    resizeTo(300);
+    await waitFor(() => expect(pageWidth()).toBeCloseTo(300, 3));
+  });
+
+  it('does not re-measure or redraw when a resize leaves the fit unchanged', async () => {
+    clientWidth.mockReturnValue(1000);
+    const { handle } = setup({}, makeHandle(5, natural));
+    await pagesReady();
+    const measured = handle.getPageSize.mock.calls.length;
+    const drawn = handle.renderPage.mock.calls.length;
+    resizeTo(1100);
+    await act(async () => {});
+    expect(handle.getPageSize.mock.calls.length).toBe(measured);
+    expect(handle.renderPage.mock.calls.length).toBe(drawn);
+  });
 });
 
 describe('PdfViewer', () => {

@@ -28,6 +28,30 @@ export function visiblePages(scrollTop: number, viewportHeight: number, pageHeig
   return pages;
 }
 
+export interface PageLayout {
+  /** The scale the sizes were measured at. */
+  scale: number;
+  sizes: Array<{ width: number; height: number }>;
+}
+
+/**
+ * Shrinks a page layout so that, at 100% zoom, its widest page fits `room`
+ * pixels; zoom then scales from that fitted size. `baseScale` is the scale of
+ * 100% zoom. It never enlarges: when the pages already fit, or the room is
+ * unknown, the same layout object comes back, so nothing has to redraw.
+ */
+export function fitToWidth(measured: PageLayout, room: number, baseScale: number): PageLayout {
+  const widest = measured.sizes.reduce((max, size) => Math.max(max, size.width), 0);
+  if (widest <= 0 || !Number.isFinite(room) || room <= 0) return measured;
+  const widestAtFullZoom = (widest * baseScale) / measured.scale;
+  const factor = Math.min(1, room / widestAtFullZoom);
+  if (factor >= 1) return measured;
+  return {
+    scale: measured.scale * factor,
+    sizes: measured.sizes.map((size) => ({ width: size.width * factor, height: size.height * factor })),
+  };
+}
+
 /** The 1-based page that contains the given scroll offset. */
 export function pageAtOffset(offset: number, pageHeights: number[]): number {
   let top = 0;

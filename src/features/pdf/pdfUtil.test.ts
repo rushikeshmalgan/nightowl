@@ -1,4 +1,36 @@
-import { describePdfError, pageAtOffset, pageOffsets, visiblePages } from './pdfUtil';
+import { describePdfError, fitToWidth, pageAtOffset, pageOffsets, visiblePages } from './pdfUtil';
+
+describe('fitToWidth', () => {
+  // Pages measured at 100% zoom (scale 1.3): 520px wide, 780px tall.
+  const atFullZoom = { scale: 1.3, sizes: [{ width: 520, height: 780 }, { width: 260, height: 390 }] };
+
+  it('shrinks every page by the same factor so the widest one fits', () => {
+    const fitted = fitToWidth(atFullZoom, 260, 1.3);
+    expect(fitted.scale).toBeCloseTo(0.65, 9);
+    expect(fitted.sizes).toEqual([
+      { width: 260, height: 390 },
+      { width: 130, height: 195 },
+    ]);
+  });
+
+  it('keeps zoom relative to the fit: pages measured at 200% come out twice the fitted size', () => {
+    const atDoubleZoom = { scale: 2.6, sizes: [{ width: 1040, height: 1560 }] };
+    const fitted = fitToWidth(atDoubleZoom, 260, 1.3);
+    expect(fitted.scale).toBeCloseTo(1.3, 9);
+    expect(fitted.sizes[0].width).toBeCloseTo(520, 9);
+  });
+
+  it('never enlarges, and hands back the same layout when it already fits', () => {
+    expect(fitToWidth(atFullZoom, 520, 1.3)).toBe(atFullZoom);
+    expect(fitToWidth(atFullZoom, 2000, 1.3)).toBe(atFullZoom);
+  });
+
+  it('leaves the layout alone when the room is unknown or there are no pages', () => {
+    expect(fitToWidth(atFullZoom, Number.POSITIVE_INFINITY, 1.3)).toBe(atFullZoom);
+    const empty = { scale: 1.3, sizes: [] };
+    expect(fitToWidth(empty, 100, 1.3)).toBe(empty);
+  });
+});
 
 describe('visiblePages', () => {
   const heights = [100, 100, 100];

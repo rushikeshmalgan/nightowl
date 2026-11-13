@@ -78,10 +78,10 @@ async function libraryNames(page) {
   return panel.getByRole('button', { name: /^Open / }).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
 }
 
-/** A 375x667 phone: touch input, mobile viewport, no hover. Fresh storage, so the seed library is present. */
-async function openMobile(env) {
+/** A phone (375x667 unless told otherwise): touch input, mobile viewport, no hover. Fresh storage, so the seed library is present. */
+async function openMobile(env, size = { width: 375, height: 667 }) {
   const context = await env.browser.newContext({
-    viewport: { width: 375, height: 667 },
+    viewport: size,
     deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
@@ -601,6 +601,38 @@ const groups = {
         await toggle.scrollIntoViewIfNeeded();
         expect(await toggle.isEnabled(), 'the dyslexia toggle is still disabled on a text document');
         await shot(page, 'mobile-text-dyslexic-enabled');
+      });
+    } finally {
+      await context.close();
+    }
+  },
+
+  /** The reporter's own device: a 360x800 Samsung with a real letter-size PDF open. */
+  async phone(_desktop, env) {
+    const { context, page } = await openMobile(env, { width: 360, height: 800 });
+    const DOC = 'Must-Do Questions Sem 7 Exams.pdf';
+    try {
+      const awake = async () => {
+        await page.touchscreen.tap(200, 300);
+        await page.waitForFunction(() => document.querySelector('[data-testid="chrome"]')?.dataset.idle === 'false');
+      };
+      await check('phone', 'a PDF page fits the screen at 100% zoom, with no sideways scroll', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles({ name: DOC, mimeType: 'application/pdf', buffer: makePdf(5) });
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await library.getByRole('button', { name: 'Close panel' }).tap();
+        await awake();
+        await page.waitForTimeout(500);
+        const m = await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+          const box = document.querySelector('[data-testid="pdf-page"]').getBoundingClientRect();
+          return { left: box.left, right: box.right, scrollW: scroller.scrollWidth, clientW: scroller.clientWidth };
+        });
+        expect(m.left >= 48 && m.right <= 360, `the page spans ${Math.round(m.left)}-${Math.round(m.right)} on a 360px screen`);
+        expect(m.scrollW <= m.clientW + 1, `the page scrolls sideways (${m.scrollW} wide in ${m.clientW})`);
+        await shot(page, 'phone-pdf-fit');
       });
     } finally {
       await context.close();

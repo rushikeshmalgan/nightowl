@@ -54,8 +54,7 @@ Spec: `docs/superpowers/specs/2026-11-13-mobile-responsive-design.md`. Plan: `do
 
 ## Resuming
 
-- Run with `npm install`, then `npm run dev`. Tests: `npm test`. Browser checks: `npm run e2e` (uses the installed Edge or Chrome); `npm run e2e -- mobile` runs only the 375px phone group, and screenshots land in `.e2e-shots/` (git-ignored).
-- The mobile pass has its own ledger at `.superpowers/sdd/2026-11-13-mobile-responsive-phases-1-4/progress.md` (rulings, findings per task).
+- Run with `npm install`, then `npm run dev`. Tests: `npm test`. Browser checks: `npm run e2e` (uses the installed Edge or Chrome).
 - A local, git-ignored ledger of per-task results and decisions is at `.superpowers/sdd/2026-11-11-nocturne-reader/progress.md`. If it is missing, go by this file and `git log`.
 - Code is organised by feature under `src/features/` (see the README's Project layout). The plan and spec mention the older `src/components`, `src/hooks`, `src/lib` paths; those files now live in their feature folder.
 - Storage tests run in the node environment with `fake-indexeddb`; app-level tests use the in-memory fakes in `src/test/fakes.ts`.
