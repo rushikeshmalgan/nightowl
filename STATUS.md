@@ -1,6 +1,6 @@
 # NightOwl Reader: build status
 
-Updated 2026-11-13. The rebuild is on `feat/nocturne-rebuild`; the mobile pass is on `feat/mobile-responsive` (branched from it, not pushed). `main` is untouched.
+Updated 2026-11-14. The rebuild is on `feat/nocturne-rebuild`; the mobile pass and its polish follow-up are on `feat/mobile-responsive` (branched from it, not pushed). `main` is untouched.
 
 - Spec: `docs/superpowers/specs/2026-11-11-nocturne-reader-design.md`
 - Plan (32 tasks): `docs/superpowers/plans/2026-11-11-nocturne-reader.md`
@@ -40,15 +40,28 @@ Spec: `docs/superpowers/specs/2026-11-13-mobile-responsive-design.md`. Plan: `do
 
 **Found, not fixed (out of scope):**
 
-- A PDF page renders about 796px wide at 100%, so on a phone it overflows sideways even at the 60% zoom minimum. It needs a fit-to-width default or the phase 5 reflow mode. The disabled-control copy deliberately does not mention Reflow until that exists (reasons live in `src/features/reader/textStyling.ts`).
-- At 375px the status line truncates the document title and the dock is cramped; the nine rail buttons are 32px, under the 44px touch guideline.
-- The Feedback panel and the Browse-music panel are not sheets yet (not in the spec's list).
+- PDF overflow on phones, the missing status-line title, the cramped dock and the 32px rail buttons: fixed in the polish follow-up below.
+- The disabled-control copy deliberately does not mention Reflow until that exists (reasons live in `src/features/reader/textStyling.ts`).
+- The Feedback panel and the Browse-music panel are not sheets yet (not in the spec's list); both now fit beside the rail.
 - A PSD ignores Bionic and the dyslexia font but its controls stay live; the spec gates PDFs only.
 - While a sheet is open on a phone, its backdrop covers the rail, so switching panels takes one extra tap.
 
+## Mobile polish (follow-up, same branch)
+
+Plan: `docs/superpowers/plans/2026-11-13-mobile-polish.md` (6 tasks). Prompted by screenshots from a 360×800 phone with a real PDF open.
+
+- **PDF fits the screen:** on a narrow screen pages shrink to the width (never enlarged, so desktop is unchanged). Zoom is relative to that fit, and zooming or rotating keeps the same page and spot in view.
+- **Status line:** the document title shows on a phone; the reader count is shortened and the state words are left to the rail's pressed buttons.
+- **Music dock:** on a phone it keeps the title, previous/play/next and Browse (44px targets), with the sleep timer inside Browse and a countdown in the dock while it runs. Source buttons appear from 1024px, so Browse is no longer pushed off a tablet screen.
+- **Rail and panels:** rail buttons are 44px on a phone and the rail scrolls when the screen is short; the Feedback and Browse panels fit beside the rail.
+
+**Verified:** 665 unit tests, typecheck and build clean, and `npm run e2e -- --build` passes 63/63 against the production build with zero CSP violations. 8 new checks run on an emulated 360×800 touch phone (one at 768×1024); each was seen failing first, and the screenshots were read.
+
+**Still open:** a fitted letter page on a phone renders at about half size, so small print is readable only zoomed in, panning sideways; Reflow (phase 5) is the real fix. Saved PDF positions are pixel offsets, so reopening at a different width lands slightly off.
+
 ## Next
 
-1. Decide whether to start mobile phases 5–6 (PDF reflow, in-document search); the PDF overflow above is the main reason to.
+1. Decide whether to start mobile phase 5 (Reflow), the fix for reading small-print PDFs on a phone, and then phase 6 (in-document search).
 2. A whole-branch code review, then decide whether to merge `feat/nocturne-rebuild` and `feat/mobile-responsive` into `main`.
 3. Optional: host `lofi.mp3`, `rain.mp3`, `pink.mp3` and set `VITE_AUDIO_CDN_BASE`; add Sufi or YouTube presets.
 
