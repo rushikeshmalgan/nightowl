@@ -1,7 +1,7 @@
 import { RotateCcw } from 'lucide-react';
 import { NARROW_QUERY, useMediaQuery } from '../../shared/useMediaQuery';
 import { KELVIN_MAX, KELVIN_MIN } from './warmth';
-import { useUi } from './ui';
+import { useUi, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from './ui';
 import type { ThemeId } from '../../shared/types';
 import { Scrubber } from '../../shared/Scrubber';
 import { SHEET_LAYOUT } from './sheet';
@@ -129,9 +129,9 @@ export function TuningPanel({ onMouseLeave }: { onMouseLeave?: () => void }) {
         <Scrubber
           label="Zoom"
           value={ui.zoom}
-          min={60}
-          max={180}
-          step={10}
+          min={ZOOM_MIN}
+          max={ZOOM_MAX}
+          step={ZOOM_STEP}
           format={(v) => `${v}%`}
           onChange={(v) => ui.set('zoom', v)}
         />

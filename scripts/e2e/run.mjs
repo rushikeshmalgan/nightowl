@@ -452,7 +452,7 @@ const groups = {
       const tuning = page.getByRole('complementary', { name: 'Tuning' });
       /** Touch has no hover: tap empty reading space to wake the faded chrome. */
       const awake = async () => {
-        await page.touchscreen.tap(250, 560);
+        await page.touchscreen.tap(200, 300);
         await page.waitForFunction(() => document.querySelector('[data-testid="chrome"]')?.dataset.idle === 'false');
       };
       await check('mobile', 'nothing scrolls sideways at 375px', async () => {
@@ -524,6 +524,39 @@ const groups = {
         expect(box === null || box.x >= 800 || box.y >= 375, `the closed panel sits at ${JSON.stringify(box)}`);
         await page.setViewportSize({ width: 375, height: 667 });
         await page.waitForTimeout(300);
+      });
+      await check('mobile', 'zoom is one tap away over the reading area, with a 44px target', async () => {
+        await awake();
+        const zoomIn = page.getByRole('button', { name: 'Zoom in' });
+        const box = await zoomIn.boundingBox();
+        expect(box !== null, 'no zoom button');
+        expect(box.width >= 44 && box.height >= 44, `target is ${box.width}x${box.height}`);
+        expect(box.x + box.width <= 375 && box.y + box.height <= 667 - 56 + 1, `zoom button box ${JSON.stringify(box)} is off screen or over the dock`);
+        const before = await page.locator('article').evaluate((el) => getComputedStyle(el).fontSize);
+        await zoomIn.tap();
+        await page.waitForTimeout(200);
+        const after = await page.locator('article').evaluate((el) => getComputedStyle(el).fontSize);
+        expect(before === '18px' && after === '20px', `font size went ${before} -> ${after}`);
+        const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+        expect(wide <= 375, `the page is ${wide}px wide after zooming`);
+        await shot(page, 'mobile-zoom');
+      });
+      await check('mobile', 'zoom works on a PDF without making the page scroll sideways', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles({ name: 'phone.pdf', mimeType: 'application/pdf', buffer: makePdf(3) });
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await library.getByRole('button', { name: 'Close panel' }).tap();
+        await awake();
+        const before = await page.getByTestId('pdf-page').first().evaluate((el) => el.getBoundingClientRect().width);
+        await page.getByRole('button', { name: 'Zoom in' }).tap();
+        await page.waitForTimeout(600);
+        const after = await page.getByTestId('pdf-page').first().evaluate((el) => el.getBoundingClientRect().width);
+        expect(after > before, `page width went ${before} -> ${after}`);
+        const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+        expect(wide <= 375, `the page body is ${wide}px wide`);
+        await shot(page, 'mobile-pdf-zoom');
       });
     } finally {
       await context.close();

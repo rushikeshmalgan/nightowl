@@ -27,6 +27,7 @@ import { useHighlights } from '../features/reader/useHighlights';
 import { useHotkeys } from '../features/shell/useHotkeys';
 import { useIdleFade } from '../features/shell/useIdleFade';
 import { FeedbackPanel } from '../features/feedback/FeedbackPanel';
+import { ZoomControl } from '../features/reader/ZoomControl';
 import { useLocalCache } from '../features/library/useLocalCache';
 import { useMusicPrefs } from '../features/music/useMusicPrefs';
 import { useMusicSource } from '../features/music/useMusicSource';
@@ -383,6 +384,9 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
             </button>
           ) : null}
         </StatusLine>
+
+        {/* Zoom without opening a panel. */}
+        {doc ? <ZoomControl zoom={ui.zoom} onChange={(zoom) => ui.set('zoom', zoom)} /> : null}
 
         {/* On a phone, a tap outside the open sheet dismisses it. */}
         {sheetOpen ? (

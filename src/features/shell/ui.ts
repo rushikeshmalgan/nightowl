@@ -36,6 +36,11 @@ export interface UiState extends UiSettings, UiPanels {
   reset(): void;
 }
 
+/** Reading zoom, in percent. One source for the tuning slider and the floating control. */
+export const ZOOM_MIN = 60;
+export const ZOOM_MAX = 180;
+export const ZOOM_STEP = 10;
+
 export const DEFAULT_SETTINGS: UiSettings = {
   theme: 'night',
   warmthK: KELVIN_DEFAULT,

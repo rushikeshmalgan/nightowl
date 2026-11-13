@@ -258,6 +258,44 @@ describe('App sheet backdrop', () => {
   });
 });
 
+describe('App zoom control', () => {
+  beforeEach(() => {
+    resetFakes();
+    act(() => useUi.getState().reset());
+  });
+
+  it('is there whenever a document is open', async () => {
+    await renderApp();
+    expect(screen.getByRole('group', { name: 'Zoom' })).toBeInTheDocument();
+  });
+
+  it('is not shown when nothing is open', async () => {
+    await renderApp();
+    state.docs = [];
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    const library = await screen.findByRole('region', { name: 'Library' });
+    fireEvent.click(within(library).getByRole('button', { name: 'Clear library' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete everything' }));
+    await screen.findByText(/Nothing is open/);
+    expect(screen.queryByRole('group', { name: 'Zoom' })).not.toBeInTheDocument();
+  });
+
+  it('zooms the reading text without opening a panel', async () => {
+    await renderApp();
+    expect(screen.getByRole('article').style.fontSize).toBe('18px');
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(useUi.getState().zoom).toBe(110);
+    expect(screen.getByRole('article').style.fontSize).toBe('20px');
+    expect(useUi.getState().tuningOpen).toBe(false);
+  });
+
+  it('shares its value with the tuning panel zoom slider', async () => {
+    await renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(screen.getByRole('slider', { name: 'Zoom' })).toHaveAttribute('aria-valuenow', '110');
+  });
+});
+
 describe('App library', () => {
   beforeEach(() => {
     resetFakes();
