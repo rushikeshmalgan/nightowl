@@ -11,6 +11,11 @@ function setup(props: Partial<React.ComponentProps<typeof FeedbackPanel>> = {}) 
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 describe('FeedbackPanel', () => {
+  it('never overhangs a narrow screen: it is capped to the space beside the rail', () => {
+    setup();
+    expect(screen.getByRole('region', { name: 'Feedback' }).className).toContain('max-w-[calc(100%-3rem)]');
+  });
+
   it('sends a typed message and thanks the reader', async () => {
     const { send } = setup();
     type('Your message', 'The focus ruler is great');

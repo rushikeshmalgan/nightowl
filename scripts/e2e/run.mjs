@@ -720,6 +720,33 @@ const groups = {
           await tablet.context.close();
         }
       });
+      await check('phone', 'every rail button is a 44px target and on screen', async () => {
+        await awake();
+        const buttons = await page
+          .getByRole('navigation', { name: 'Tools' })
+          .getByRole('button')
+          .evaluateAll((els) =>
+            els.map((el) => {
+              const r = el.getBoundingClientRect();
+              return { name: el.getAttribute('aria-label'), top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+            }),
+          );
+        const small = buttons.filter((b) => b.width < 44 || b.height < 44);
+        expect(small.length === 0, `under 44px: ${small.map((b) => `${b.name} ${Math.round(b.width)}x${Math.round(b.height)}`).join(', ')}`);
+        const off = buttons.filter((b) => b.top < 0 || b.bottom > 800);
+        expect(off.length === 0, `off screen: ${off.map((b) => b.name).join(', ')}`);
+        await shot(page, 'phone-rail');
+      });
+      await check('phone', 'the feedback panel fits beside the rail', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Send feedback', exact: true }).tap();
+        const panel = page.getByRole('region', { name: 'Feedback', exact: true });
+        await panel.waitFor();
+        const box = await panel.boundingBox();
+        expect(box.x >= 47.5 && box.x + box.width <= 360.5, `the panel spans ${Math.round(box.x)}-${Math.round(box.x + box.width)}`);
+        await shot(page, 'phone-feedback');
+        await panel.getByRole('button', { name: 'Close feedback' }).tap();
+      });
     } finally {
       await context.close();
     }
