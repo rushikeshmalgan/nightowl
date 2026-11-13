@@ -634,6 +634,32 @@ const groups = {
         expect(m.scrollW <= m.clientW + 1, `the page scrolls sideways (${m.scrollW} wide in ${m.clientW})`);
         await shot(page, 'phone-pdf-fit');
       });
+      await check('phone', 'zooming in keeps the same page in view', async () => {
+        await awake();
+        const pageTop = () =>
+          page.evaluate(() => {
+            const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+            const target = document.querySelector('[data-testid="pdf-page"][data-page="4"]');
+            return target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+          });
+        await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+          const target = document.querySelector('[data-testid="pdf-page"][data-page="4"]');
+          scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 100;
+        });
+        await page.waitForTimeout(400);
+        const before = await pageTop();
+        for (let tap = 0; tap < 3; tap++) {
+          await page.getByRole('button', { name: 'Zoom in' }).tap();
+          await page.waitForTimeout(300);
+        }
+        await page.waitForTimeout(600);
+        const after = await pageTop();
+        expect(Math.abs(after - before) < 60, `page 4 moved from ${Math.round(before)}px to ${Math.round(after)}px below the top`);
+        await shot(page, 'phone-pdf-zoomed');
+        await page.getByRole('button', { name: /^Reset zoom/ }).tap();
+        await page.waitForTimeout(400);
+      });
     } finally {
       await context.close();
     }

@@ -37,6 +37,14 @@ export interface PdfViewerProps {
   ref?: Ref<PdfViewerHandle>;
 }
 
+/** Where the reader is: the page under the top edge, how far into it, and the horizontal centre at `scale`. */
+interface Anchor {
+  index: number;
+  fraction: number;
+  centreX: number;
+  scale: number;
+}
+
 /** A computed padding in pixels; unset values (and jsdom) give 0. */
 function px(value: string): number {
   return Number.parseFloat(value) || 0;
@@ -58,6 +66,7 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
   const textEls = useRef(new Map<number, HTMLDivElement>());
   const renderedAt = useRef(new Map<number, number>());
   const restored = useRef(false);
+  const anchor = useRef<Anchor | null>(null);
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const latest = useRef({ onProgress, onError, initialPage, initialScrollTop });
@@ -141,6 +150,30 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
     return () => observer.disconnect();
   }, []);
 
+  const readAnchor = useCallback((at: PageLayout): Anchor | null => {
+    const scroller = ownScroller.current;
+    if (!scroller || at.sizes.length === 0) return null;
+    const stacked = at.sizes.map((size) => size.height + PDF_PAGE_GAP);
+    const offsets = pageOffsets(stacked);
+    const top = Math.max(0, scroller.scrollTop);
+    const index = pageAtOffset(top, stacked) - 1;
+    const fraction = Math.min(1, Math.max(0, (top - offsets[index]) / stacked[index]));
+    return { index, fraction, centreX: scroller.scrollLeft + scroller.clientWidth / 2, scale: at.scale };
+  }, []);
+
+  // After a zoom or a refit, put the reader back on the same spot of the same page, before the browser paints.
+  useLayoutEffect(() => {
+    const scroller = ownScroller.current;
+    const from = anchor.current;
+    if (!scroller || !layout || !restored.current || !from || from.scale === layout.scale || layout.sizes.length === 0) return;
+    const stacked = layout.sizes.map((size) => size.height + PDF_PAGE_GAP);
+    const offsets = pageOffsets(stacked);
+    const index = Math.min(from.index, offsets.length - 1);
+    scroller.scrollTop = offsets[index] + from.fraction * stacked[index];
+    scroller.scrollLeft = Math.max(0, from.centreX * (layout.scale / from.scale) - scroller.clientWidth / 2);
+    anchor.current = readAnchor(layout);
+  }, [layout, readAnchor]);
+
   /** Draws the pages near the viewport and frees the ones far from it. */
   const renderVisible = useCallback(() => {
     const scroller = ownScroller.current;
@@ -199,11 +232,12 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
       const offsets = pageOffsets(layout.sizes.map((size) => size.height + PDF_PAGE_GAP));
       if (savedTop > 0) scroller.scrollTop = savedTop;
       else if (savedPage > 1) scroller.scrollTop = offsets[Math.min(savedPage, offsets.length) - 1] ?? 0;
+      anchor.current = readAnchor(layout);
       const progress = currentProgress();
       if (progress) latest.current.onProgress(progress);
     }
     renderVisible();
-  }, [layout, renderVisible, currentProgress]);
+  }, [layout, renderVisible, currentProgress, readAnchor]);
 
   useEffect(
     () => () => {
@@ -227,6 +261,7 @@ export function PdfViewer({ data, initialPage, initialScrollTop, zoom, nightPage
   );
 
   const onScroll = () => {
+    if (layout) anchor.current = readAnchor(layout);
     renderVisible();
     if (progressTimer.current) return;
     progressTimer.current = setTimeout(() => {

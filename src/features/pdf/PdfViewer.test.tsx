@@ -145,6 +145,43 @@ describe('PdfViewer fit to width', () => {
     await waitFor(() => expect(pageWidth()).toBeCloseTo(300, 3));
   });
 
+  it('keeps the same page under the top edge when the zoom changes', async () => {
+    // Unconstrained: 520x780 pages at 100%, 1040x1560 at 200%.
+    const { rerender, props, ref } = setup({}, makeHandle(5, natural));
+    await pagesReady();
+    const scroller = screen.getByTestId('pdf-scroll');
+    const step100 = 780 + PDF_PAGE_GAP;
+    scroller.scrollTop = 2 * step100 + 0.25 * step100; // a quarter of the way into page 3
+    fireEvent.scroll(scroller);
+    rerender(<PdfViewer ref={ref} {...props} zoom={200} />);
+    const step200 = 1560 + PDF_PAGE_GAP;
+    await waitFor(() => expect(scroller.scrollTop).toBeCloseTo(2 * step200 + 0.25 * step200, 0));
+  });
+
+  it('keeps the place when a resize refits the pages', async () => {
+    clientWidth.mockReturnValue(260);
+    setup({}, makeHandle(5, natural));
+    await pagesReady();
+    const scroller = screen.getByTestId('pdf-scroll');
+    const fitted = 390 + PDF_PAGE_GAP;
+    scroller.scrollTop = 2 * fitted + 0.5 * fitted; // halfway into page 3
+    fireEvent.scroll(scroller);
+    resizeTo(700);
+    const full = 780 + PDF_PAGE_GAP;
+    await waitFor(() => expect(scroller.scrollTop).toBeCloseTo(2 * full + 0.5 * full, 0));
+  });
+
+  it('keeps the horizontal centre when zooming past the screen width', async () => {
+    clientWidth.mockReturnValue(260);
+    const { rerender, props, ref } = setup({}, makeHandle(5, natural));
+    await pagesReady();
+    const scroller = screen.getByTestId('pdf-scroll');
+    expect(scroller.scrollLeft).toBe(0);
+    rerender(<PdfViewer ref={ref} {...props} zoom={200} />);
+    // The centre was at 130px of a 260px page; at twice the size it is at 260px, so 130px off the left edge.
+    await waitFor(() => expect(scroller.scrollLeft).toBeCloseTo(130, 0));
+  });
+
   it('does not re-measure or redraw when a resize leaves the fit unchanged', async () => {
     clientWidth.mockReturnValue(1000);
     const { handle } = setup({}, makeHandle(5, natural));
