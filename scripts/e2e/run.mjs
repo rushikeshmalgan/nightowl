@@ -669,6 +669,57 @@ const groups = {
         expect(text.startsWith('Must-Do'), `the title reads "${text}"`);
         await shot(page, 'phone-status-line');
       });
+      /** Every visible button or select in the music dock, with its box. */
+      const dockControls = (target) =>
+        target
+          .getByRole('region', { name: 'Music', exact: true })
+          .locator('button, select')
+          .evaluateAll((els) =>
+            els
+              .filter((el) => el.offsetParent !== null)
+              .map((el) => {
+                const r = el.getBoundingClientRect();
+                return { name: el.getAttribute('aria-label') || el.tagName, left: r.left, right: r.right, width: r.width, height: r.height };
+              }),
+          );
+      await check('phone', 'every music dock control is on screen with a 44px target', async () => {
+        await awake();
+        const controls = await dockControls(page);
+        const off = controls.filter((c) => c.left < 47.5 || c.right > 360.5);
+        expect(off.length === 0, `off screen: ${off.map((c) => `${c.name} ${Math.round(c.left)}-${Math.round(c.right)}`).join(', ')}`);
+        const small = controls.filter((c) => c.width < 44 || c.height < 44);
+        expect(small.length === 0, `under 44px: ${small.map((c) => `${c.name} ${Math.round(c.width)}x${Math.round(c.height)}`).join(', ')}`);
+        expect(controls.some((c) => c.name === 'Browse music'), 'there is no Browse button');
+        await shot(page, 'phone-dock');
+      });
+      await check('phone', 'Browse opens beside the rail and the sleep timer can be set from it', async () => {
+        await awake();
+        const dock = page.getByRole('region', { name: 'Music', exact: true });
+        await dock.getByRole('button', { name: 'Browse music' }).tap();
+        const panel = page.getByRole('region', { name: 'Browse music' });
+        await panel.waitFor();
+        const box = await panel.boundingBox();
+        expect(box.x >= 47.5 && box.x + box.width <= 360.5, `the panel spans ${Math.round(box.x)}-${Math.round(box.x + box.width)}`);
+        await panel.getByLabel('Sleep timer').selectOption('30');
+        await page.waitForTimeout(300);
+        const text = await dock.innerText();
+        expect(/\d+:\d\d/.test(text), `no countdown in the dock: "${text.replace(/\s+/g, ' ')}"`);
+        await shot(page, 'phone-browse');
+        await panel.getByLabel('Sleep timer').selectOption('0');
+        await dock.getByRole('button', { name: 'Browse music' }).tap();
+      });
+      await check('phone', 'at tablet width (768px) every dock control stays on screen', async () => {
+        const tablet = await openMobile(env, { width: 768, height: 1024 });
+        try {
+          const controls = await dockControls(tablet.page);
+          const off = controls.filter((c) => c.right > 768.5);
+          expect(off.length === 0, `off screen: ${off.map((c) => `${c.name} ${Math.round(c.left)}-${Math.round(c.right)}`).join(', ')}`);
+          expect(controls.some((c) => c.name === 'Browse music'), 'there is no Browse button');
+          await shot(tablet.page, 'tablet-dock');
+        } finally {
+          await tablet.context.close();
+        }
+      });
     } finally {
       await context.close();
     }

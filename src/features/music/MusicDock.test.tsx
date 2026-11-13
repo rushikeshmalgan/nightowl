@@ -5,6 +5,7 @@ import type { PlaybackState } from './adapter';
 import { CATEGORIES } from './playlists';
 import type { TrackRecord } from '../../shared/types';
 import { MusicDock } from './MusicDock';
+import { setMedia } from '../../test/media';
 
 vi.mock('./TrackUpload', () => ({ TrackUpload: () => <div data-testid="track-upload" /> }));
 
@@ -38,7 +39,55 @@ function setup(m: MusicSource = music(), props: Partial<React.ComponentProps<typ
 
 const browse = () => fireEvent.click(screen.getByRole('button', { name: 'Browse music' }));
 
+describe('MusicDock on a phone', () => {
+  beforeEach(() => setMedia({ narrow: true }));
+
+  it('keeps only what fits: title, previous, play, next and Browse; no cover or inline sleep select', () => {
+    setup(music({ title: 'Lo-Fi', artist: 'NightOwl', artUrl: 'https://i.scdn.co/image/a' }));
+    const dock = screen.getByRole('region', { name: 'Music' });
+    expect(within(dock).getByText('Lo-Fi')).toBeInTheDocument();
+    for (const name of ['Previous', 'Play', 'Next', 'Browse music']) expect(within(dock).getByRole('button', { name })).toBeInTheDocument();
+    expect(within(dock).queryByRole('img')).not.toBeInTheDocument();
+    expect(within(dock).queryByLabelText('Sleep timer')).not.toBeInTheDocument();
+  });
+
+  it('offers the sleep timer in the Browse panel instead', () => {
+    const { m } = setup();
+    browse();
+    const panel = screen.getByRole('region', { name: 'Browse music' });
+    fireEvent.change(within(panel).getByLabelText('Sleep timer'), { target: { value: '30' } });
+    expect(m.setSleepTimer).toHaveBeenCalledWith(30);
+  });
+
+  it('still shows a running sleep countdown in the dock', () => {
+    setup(music({}, { sleepMinutes: 15, sleepRemainingMs: 125_000 }));
+    expect(within(screen.getByRole('region', { name: 'Music' })).getByText('2:05')).toBeInTheDocument();
+  });
+
+  it('keeps the Browse panel beside the rail, never wider than the screen allows', () => {
+    setup();
+    browse();
+    expect(screen.getByRole('region', { name: 'Browse music' }).className).toContain('max-w-[calc(100%-3rem)]');
+  });
+});
+
+describe('MusicDock source buttons', () => {
+  it('appear from the lg breakpoint, so they cannot push Browse off a tablet screen', () => {
+    setup();
+    const group = screen.getByRole('group', { name: 'Source' });
+    expect(group.className).toContain('lg:flex');
+    expect(group.className).not.toContain('sm:flex');
+  });
+});
+
 describe('MusicDock', () => {
+  it('keeps the cover and the inline sleep select on a wide screen', () => {
+    setup(music({ title: 'Lo-Fi', artUrl: 'https://i.scdn.co/image/a' }));
+    const dock = screen.getByRole('region', { name: 'Music' });
+    expect(within(dock).getByRole('img')).toBeInTheDocument();
+    expect(within(dock).getByLabelText('Sleep timer')).toBeInTheDocument();
+  });
+
   it('is a 56px bar showing what is playing', () => {
     setup(music({ title: 'Bollywood Acoustic', artist: 'Spotify', language: 'HI', artUrl: 'https://i.scdn.co/image/a' }));
     const dock = screen.getByRole('region', { name: 'Music' });

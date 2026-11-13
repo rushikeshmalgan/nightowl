@@ -8,6 +8,7 @@ import type { Category } from './playlists';
 import type { TrackRecord } from '../../shared/types';
 import { formatCountdown } from '../audio/AudioPanel';
 import { Scrubber } from '../../shared/Scrubber';
+import { NARROW_QUERY, useMediaQuery } from '../../shared/useMediaQuery';
 import { TrackUpload } from './TrackUpload';
 
 export interface MusicDockProps {
@@ -30,11 +31,28 @@ const SOURCES: Array<{ id: SourceId; label: string; online: boolean }> = [
 const BAD_LINK = 'That link is not a Spotify or YouTube link.';
 const MY_TRACKS = 'my-tracks';
 
+/** 44px touch targets on a phone, 32px from `sm` up. */
 const button =
-  'motion-color flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink outline-none hover:bg-active focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-30';
+  'motion-color flex h-11 w-11 shrink-0 items-center justify-center rounded text-ink outline-none hover:bg-active focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-30 sm:h-8 sm:w-8';
 
 function mmss(seconds: number): string {
   return formatCountdown(seconds * 1000);
+}
+
+function SleepSelect({ music, className }: { music: MusicSource; className: string }) {
+  return (
+    <select
+      aria-label="Sleep timer"
+      value={music.sleepMinutes}
+      onChange={(event) => music.setSleepTimer(Number(event.target.value) as SleepMinutes)}
+      className={`rounded border border-line bg-canvas font-mono text-ink outline-none ${className}`}
+    >
+      <option value={0}>Sleep off</option>
+      <option value={15}>15m</option>
+      <option value={30}>30m</option>
+      <option value={60}>60m</option>
+    </select>
+  );
 }
 
 /** Turns a recognised link into a playable item. */
@@ -50,6 +68,8 @@ function linkToItem(link: string): PlaylistItem | null {
 /** The music bar along the bottom of the reader, with a browse panel above it. */
 export function MusicDock({ music, categories, tracks, customPlaylists, online, onAddCustom, onTracksChanged }: MusicDockProps) {
   const { state } = music;
+  // A phone has 312px beside the rail: no cover, a flexible title, and the sleep timer moves into Browse.
+  const narrow = useMediaQuery(NARROW_QUERY);
   const [browsing, setBrowsing] = useState(false);
   const [tab, setTab] = useState(categories[0]?.id ?? MY_TRACKS);
   const [link, setLink] = useState('');
@@ -79,7 +99,7 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
   return (
     <>
       {browsing ? (
-        <section aria-label="Browse music" className="absolute bottom-14 right-0 w-80 max-w-full border-l border-t border-line bg-surface">
+        <section aria-label="Browse music" className="absolute bottom-14 right-0 w-80 max-w-[calc(100%-3rem)] border-l border-t border-line bg-surface">
           <div role="tablist" aria-label="Categories" className="flex flex-wrap gap-1 border-b border-line p-2">
             {[...categories.map((c) => ({ id: c.id, name: c.name })), { id: MY_TRACKS, name: 'My Tracks' }].map((entry) => (
               <button
@@ -119,6 +139,13 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
             )}
           </div>
 
+          {narrow ? (
+            <label className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11px] text-muted">
+              Sleep timer
+              <SleepSelect music={music} className="h-10 px-2 text-xs" />
+            </label>
+          ) : null}
+
           <form
             className="flex gap-1 border-t border-line p-2"
             onSubmit={(event) => {
@@ -153,17 +180,24 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
         </section>
       ) : null}
 
-      <section aria-label="Music" className="absolute bottom-0 left-12 right-0 flex h-14 items-center gap-3 border-t border-line bg-canvas px-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded bg-surface">
-          {state.artUrl ? <img src={state.artUrl} alt={`Cover of ${state.title}`} className="h-full w-full object-cover" /> : <Music2 size={14} strokeWidth={1.75} className="text-muted" />}
-        </div>
-        <div className="flex w-40 min-w-0 shrink-0 flex-col">
+      <section aria-label="Music" className="absolute bottom-0 left-12 right-0 flex h-14 items-center gap-2 border-t border-line bg-canvas px-2 sm:gap-3 sm:px-3">
+        {narrow ? null : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded bg-surface">
+            {state.artUrl ? <img src={state.artUrl} alt={`Cover of ${state.title}`} className="h-full w-full object-cover" /> : <Music2 size={14} strokeWidth={1.75} className="text-muted" />}
+          </div>
+        )}
+        <div className={narrow ? 'flex min-w-0 flex-1 flex-col' : 'flex w-40 min-w-0 shrink-0 flex-col'}>
           <span className="truncate text-xs text-ink">{state.title || 'Nothing playing'}</span>
           <span className="flex items-center gap-1 truncate text-[10px] text-muted">
             <span className="truncate">{state.artist}</span>
             {state.language ? <span className="font-mono text-accent">{state.language}</span> : null}
           </span>
         </div>
+        {narrow && music.sleepRemainingMs !== null ? (
+          <span title="Sleep timer" className="shrink-0 font-mono text-[10px] tabular-nums text-muted">
+            {formatCountdown(music.sleepRemainingMs)}
+          </span>
+        ) : null}
 
         <div className="flex shrink-0 items-center">
           <button type="button" aria-label="Previous" disabled={!state.canSkip} onClick={music.previous} className={button}>
@@ -211,23 +245,15 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
           />
         </div>
 
-        <label className="flex shrink-0 items-center gap-1 text-[10px] text-muted">
-          <span className="sr-only">Sleep timer</span>
-          <select
-            aria-label="Sleep timer"
-            value={music.sleepMinutes}
-            onChange={(event) => music.setSleepTimer(Number(event.target.value) as SleepMinutes)}
-            className="rounded border border-line bg-canvas px-1 py-1 font-mono text-[10px] text-ink outline-none"
-          >
-            <option value={0}>Sleep off</option>
-            <option value={15}>15m</option>
-            <option value={30}>30m</option>
-            <option value={60}>60m</option>
-          </select>
-          {music.sleepRemainingMs !== null ? <span className="font-mono tabular-nums">{formatCountdown(music.sleepRemainingMs)}</span> : null}
-        </label>
+        {narrow ? null : (
+          <label className="flex shrink-0 items-center gap-1 text-[10px] text-muted">
+            <span className="sr-only">Sleep timer</span>
+            <SleepSelect music={music} className="px-1 py-1 text-[10px]" />
+            {music.sleepRemainingMs !== null ? <span className="font-mono tabular-nums">{formatCountdown(music.sleepRemainingMs)}</span> : null}
+          </label>
+        )}
 
-        <div role="group" aria-label="Source" className="hidden shrink-0 items-center gap-1 sm:flex">
+        <div role="group" aria-label="Source" className="hidden shrink-0 items-center gap-1 lg:flex">
           {SOURCES.map((source) => {
             const disabled = source.online && !online;
             return (
