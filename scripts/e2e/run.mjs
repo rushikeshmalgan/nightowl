@@ -6,6 +6,7 @@
 // Starts its own Vite dev server and drives the Edge or Chrome already
 // installed on this machine (no browser download). Exits non-zero on failure.
 import { spawnSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -77,6 +78,28 @@ async function libraryNames(page) {
   return panel.getByRole('button', { name: /^Open / }).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
 }
 
+/** A phone (375x667 unless told otherwise): touch input, mobile viewport, no hover. Fresh storage, so the seed library is present. */
+async function openMobile(env, size = { width: 375, height: 667 }) {
+  const context = await env.browser.newContext({
+    viewport: size,
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  watch(page);
+  await page.goto(env.url, { timeout: 45000 });
+  await page.waitForSelector('[data-testid="status-title"]');
+  await page.waitForSelector('article');
+  return { context, page };
+}
+
+const SHOTS = join(root, '.e2e-shots');
+async function shot(page, name) {
+  mkdirSync(SHOTS, { recursive: true });
+  await page.screenshot({ path: join(SHOTS, `${name}.png` ) });
+}
+
 const groups = {
   async shell(page) {
     await check('shell', 'app loads with the seeded document', async () => {
@@ -91,6 +114,31 @@ const groups = {
         expect(text.includes('Local mode'), `badge said "${text}"`);
       });
     }
+    await check('shell', 'the feedback form addresses the owner', async () => {
+      await wake(page);
+      await page.getByRole('button', { name: 'Send feedback' }).click();
+      const panel = page.getByRole('region', { name: 'Feedback' });
+      await panel.getByLabel('Your message').fill('The night pages toggle is great');
+      const hasKey = Boolean(loadEnv(useBuild ? 'production' : 'development', root, 'VITE_').VITE_FEEDBACK_KEY);
+      if (!hasKey) {
+        const href = await panel.getByRole('link', { name: 'Open in your email app' }).getAttribute('href');
+        expect(href?.startsWith('mailto:rushikeshmalgan0090@gmail.com?') && href.includes('night%20pages'), `link was ${href}`);
+      } else {
+        expect(await panel.getByRole('button', { name: 'Send' }).isVisible(), 'no Send button');
+      }
+      await panel.getByRole('button', { name: 'Close feedback' }).click();
+      return hasKey ? 'send mode' : 'email-app mode';
+    });
+    await check('shell', 'on desktop the library is still a 288px side drawer with no backdrop', async () => {
+      await wake(page);
+      await page.getByRole('button', { name: 'Library', exact: true }).click();
+      const library = page.getByRole('region', { name: 'Library', exact: true });
+      const box = await library.boundingBox();
+      expect(box && Math.round(box.width) === 288 && Math.round(box.x) === 48, `library box was ${JSON.stringify(box)}`);
+      expect((await page.getByTestId('sheet-backdrop').isVisible()) === false, 'the phone backdrop shows on desktop');
+      expect((await library.getByTestId('sheet-header').isVisible()) === false, 'the phone handle shows on desktop');
+      await page.getByRole('button', { name: 'Library', exact: true }).click();
+    });
     await check('shell', 'chrome fades after 3 s of no input and wakes on movement', async () => {
       await page.mouse.move(600, 400);
       await page.waitForTimeout(3500);
@@ -315,17 +363,25 @@ const groups = {
       });
       return await badge(page).innerText();
     });
-    await check('presence', 'a second tab makes it 2 online in both', async () => {
+    await check('presence', 'a second tab adds one reader in both tabs', async () => {
+      // Other readers (for example the owner's own open tab) may already be counted.
+      const count = (text) => Number(/^([\d,]+) online/.exec(text.trim())?.[1].replace(/,/g, '') ?? NaN);
+      const before = count(await badge(page).innerText());
       const second = await page.context().newPage();
       await second.goto(page.url());
-      const two = (p) =>
-        p.waitForFunction(() => /^2 online/.test(document.querySelector('[data-testid="presence"]')?.textContent?.trim() ?? ''), undefined, {
-          timeout: 25000,
-        });
-      await Promise.all([two(page), two(second)]);
+      const raised = (p) =>
+        p.waitForFunction(
+          (expected) => {
+            const match = /^([\d,]+) online/.exec(document.querySelector('[data-testid="presence"]')?.textContent?.trim() ?? '');
+            return match !== null && Number(match[1].replace(/,/g, '')) === expected;
+          },
+          before + 1,
+          { timeout: 25000 },
+        );
+      await Promise.all([raised(page), raised(second)]);
       const text = await badge(second).innerText();
       await second.close();
-      return text;
+      return `${before} -> ${count(text)}`;
     });
   },
 
@@ -388,6 +444,312 @@ const groups = {
       await dock.getByRole('button', { name: 'Pause' }).click();
     });
     await page.context().setOffline(false);
+  },
+
+  async mobile(_desktop, env) {
+    const { context, page } = await openMobile(env);
+    try {
+      const tuning = page.getByRole('complementary', { name: 'Tuning' });
+      /** Touch has no hover: tap empty reading space to wake the faded chrome. */
+      const awake = async () => {
+        await page.touchscreen.tap(200, 300);
+        await page.waitForFunction(() => document.querySelector('[data-testid="chrome"]')?.dataset.idle === 'false');
+      };
+      await check('mobile', 'nothing scrolls sideways at 375px', async () => {
+        const widths = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: innerWidth }));
+        expect(widths.doc <= widths.view, `document is ${widths.doc}px wide in a ${widths.view}px window`);
+        await shot(page, 'mobile-closed');
+      });
+      await check('mobile', 'the emulated phone has no mouse hover', async () => {
+        const hover = await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches);
+        expect(hover === false, 'the phone reports a hovering fine pointer');
+      });
+      await check('mobile', 'a touch on the right edge does not open the tuning panel', async () => {
+        await page.touchscreen.tap(372, 300);
+        await page.waitForTimeout(300);
+        expect((await tuning.getAttribute('data-open')) === 'false', 'the tuning panel opened');
+        expect((await page.getByTestId('tuning-hover-strip').count()) === 0, 'the hover strip exists on touch');
+      });
+
+      const sheets = [
+        { label: 'Tuning', panel: tuning, closed: async () => (await tuning.getAttribute('data-open')) === 'false' },
+        { label: 'Library', panel: page.getByRole('region', { name: 'Library', exact: true }), closed: async () => (await page.getByRole('region', { name: 'Library', exact: true }).count()) === 0 },
+        { label: 'Ambient sound', panel: page.getByRole('region', { name: 'Ambient sound' }), closed: async () => (await page.getByRole('region', { name: 'Ambient sound' }).count()) === 0 },
+      ];
+      for (const sheet of sheets) {
+        const open = async () => {
+          await awake();
+          await page.getByRole('button', { name: sheet.label, exact: true }).tap();
+          await page.waitForTimeout(350);
+        };
+        await check('mobile', `${sheet.label} opens as a bottom sheet above the dock, leaving the document visible`, async () => {
+          await open();
+          const box = await sheet.panel.boundingBox();
+          expect(box !== null, 'the sheet has no box');
+          expect(Math.round(box.width) === 375, `width was ${box.width}`);
+          expect(box.height <= 0.75 * 667 + 1, `height ${box.height} is more than 75% of the screen`);
+          expect(box.y + box.height <= 667 - 56 + 1, `bottom edge ${box.y + box.height} overlaps the 56px dock`);
+          expect(box.y >= 100, `top edge ${box.y} leaves under 100px of the document visible`);
+          await shot(page, `mobile-sheet-${sheet.label.replace(/\W+/g, '-').toLowerCase()}`);
+        });
+        await check('mobile', `a tap outside dismisses the ${sheet.label} sheet`, async () => {
+          await page.touchscreen.tap(187, 30);
+          await page.waitForTimeout(350);
+          expect(await sheet.closed(), 'the sheet is still open');
+        });
+        await check('mobile', `swiping the ${sheet.label} handle down dismisses it`, async () => {
+          await open();
+          const handle = await sheet.panel.getByTestId('sheet-handle').boundingBox();
+          const x = handle.x + handle.width / 2;
+          const y = handle.y + handle.height / 2;
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x, y + 90, { steps: 6 });
+          await page.mouse.up();
+          await page.waitForTimeout(350);
+          expect(await sheet.closed(), 'the sheet is still open after the swipe');
+        });
+      }
+      await check('mobile', 'the close button dismisses the sheet', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        await page.getByRole('region', { name: 'Library', exact: true }).getByRole('button', { name: 'Close panel' }).tap();
+        await page.waitForTimeout(350);
+        expect((await page.getByRole('region', { name: 'Library', exact: true }).count()) === 0, 'still open');
+      });
+      await check('mobile', 'rotating to landscape does not leave the closed tuning panel on screen', async () => {
+        await page.setViewportSize({ width: 800, height: 375 });
+        await page.waitForTimeout(400);
+        const box = await tuning.boundingBox();
+        expect(box === null || box.x >= 800 || box.y >= 375, `the closed panel sits at ${JSON.stringify(box)}`);
+        await page.setViewportSize({ width: 375, height: 667 });
+        await page.waitForTimeout(300);
+      });
+      await check('mobile', 'zoom is one tap away over the reading area, with a 44px target', async () => {
+        await awake();
+        const zoomIn = page.getByRole('button', { name: 'Zoom in' });
+        const box = await zoomIn.boundingBox();
+        expect(box !== null, 'no zoom button');
+        expect(box.width >= 44 && box.height >= 44, `target is ${box.width}x${box.height}`);
+        expect(box.x + box.width <= 375 && box.y + box.height <= 667 - 56 + 1, `zoom button box ${JSON.stringify(box)} is off screen or over the dock`);
+        const before = await page.locator('article').evaluate((el) => getComputedStyle(el).fontSize);
+        await zoomIn.tap();
+        await page.waitForTimeout(200);
+        const after = await page.locator('article').evaluate((el) => getComputedStyle(el).fontSize);
+        expect(before === '18px' && after === '20px', `font size went ${before} -> ${after}`);
+        const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+        expect(wide <= 375, `the page is ${wide}px wide after zooming`);
+        await shot(page, 'mobile-zoom');
+      });
+      await check('mobile', 'zoom works on a PDF without making the page scroll sideways', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles({ name: 'phone.pdf', mimeType: 'application/pdf', buffer: makePdf(3) });
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await library.getByRole('button', { name: 'Close panel' }).tap();
+        await awake();
+        const before = await page.getByTestId('pdf-page').first().evaluate((el) => el.getBoundingClientRect().width);
+        await page.getByRole('button', { name: 'Zoom in' }).tap();
+        await page.waitForTimeout(600);
+        const after = await page.getByTestId('pdf-page').first().evaluate((el) => el.getBoundingClientRect().width);
+        expect(after > before, `page width went ${before} -> ${after}`);
+        const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+        expect(wide <= 375, `the page body is ${wide}px wide`);
+        await shot(page, 'mobile-pdf-zoom');
+      });
+      // phone.pdf is still open from the check above.
+      await check('mobile', 'on a PDF the Bionic button is disabled and says why', async () => {
+        await awake();
+        const bionic = page.getByRole('button', { name: 'Bionic reading', exact: true });
+        expect(await bionic.isDisabled(), 'the Bionic button is still enabled on a PDF');
+        const title = await bionic.getAttribute('title');
+        expect(title === 'Bionic reading is not available for PDF pages.', `title was ${title}`);
+        await page.keyboard.press('Control+b');
+        await page.waitForTimeout(150);
+        const flagged = (await page.getByTestId('status-title').locator('xpath=..').innerText()).includes('Bionic');
+        expect(!flagged, 'the status line shows a Bionic flag on a PDF');
+      });
+      await check('mobile', 'on a PDF the dyslexia font is disabled in the sheet, with the reason on screen', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Tuning', exact: true }).tap();
+        const sheet = page.getByRole('complementary', { name: 'Tuning' });
+        await page.waitForFunction(() => document.querySelector('aside[aria-label="Tuning"]')?.dataset.open === 'true');
+        await page.waitForTimeout(400);
+        const toggle = sheet.getByRole('button', { name: /Dyslexia-friendly font/ });
+        await toggle.scrollIntoViewIfNeeded();
+        expect(await toggle.isDisabled(), 'the dyslexia toggle is still enabled on a PDF');
+        const reason = sheet.getByText('The dyslexia-friendly font is not available for PDF pages.');
+        await reason.scrollIntoViewIfNeeded();
+        const box = await reason.boundingBox();
+        expect(box !== null, 'the reason is not rendered');
+        expect(box.x >= 0 && box.x + box.width <= 375 && box.y >= 0 && box.y + box.height <= 667 - 56 + 1, `reason box ${JSON.stringify(box)} is off screen or under the dock`);
+        await shot(page, 'mobile-pdf-dyslexic-blocked');
+        await sheet.getByRole('button', { name: 'Close panel' }).tap();
+      });
+      await check('mobile', 'returning to a text document turns both controls back on', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByRole('button', { name: /^Open Sleep/ }).tap();
+        await page.waitForSelector('article');
+        await awake();
+        expect(await page.getByRole('button', { name: 'Bionic reading', exact: true }).isEnabled(), 'Bionic still disabled on a text document');
+        await page.getByRole('button', { name: 'Tuning', exact: true }).tap();
+        await page.waitForTimeout(400);
+        const toggle = page.getByRole('complementary', { name: 'Tuning' }).getByRole('button', { name: /Dyslexia-friendly font/ });
+        await toggle.scrollIntoViewIfNeeded();
+        expect(await toggle.isEnabled(), 'the dyslexia toggle is still disabled on a text document');
+        await shot(page, 'mobile-text-dyslexic-enabled');
+      });
+    } finally {
+      await context.close();
+    }
+  },
+
+  /** The reporter's own device: a 360x800 Samsung with a real letter-size PDF open. */
+  async phone(_desktop, env) {
+    const { context, page } = await openMobile(env, { width: 360, height: 800 });
+    const DOC = 'Must-Do Questions Sem 7 Exams.pdf';
+    try {
+      const awake = async () => {
+        await page.touchscreen.tap(200, 300);
+        await page.waitForFunction(() => document.querySelector('[data-testid="chrome"]')?.dataset.idle === 'false');
+      };
+      await check('phone', 'a PDF page fits the screen at 100% zoom, with no sideways scroll', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles({ name: DOC, mimeType: 'application/pdf', buffer: makePdf(5) });
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await library.getByRole('button', { name: 'Close panel' }).tap();
+        await awake();
+        await page.waitForTimeout(500);
+        const m = await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+          const box = document.querySelector('[data-testid="pdf-page"]').getBoundingClientRect();
+          return { left: box.left, right: box.right, scrollW: scroller.scrollWidth, clientW: scroller.clientWidth };
+        });
+        expect(m.left >= 48 && m.right <= 360, `the page spans ${Math.round(m.left)}-${Math.round(m.right)} on a 360px screen`);
+        expect(m.scrollW <= m.clientW + 1, `the page scrolls sideways (${m.scrollW} wide in ${m.clientW})`);
+        await shot(page, 'phone-pdf-fit');
+      });
+      await check('phone', 'zooming in keeps the same page in view', async () => {
+        await awake();
+        const pageTop = () =>
+          page.evaluate(() => {
+            const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+            const target = document.querySelector('[data-testid="pdf-page"][data-page="4"]');
+            return target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+          });
+        await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+          const target = document.querySelector('[data-testid="pdf-page"][data-page="4"]');
+          scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 100;
+        });
+        await page.waitForTimeout(400);
+        const before = await pageTop();
+        for (let tap = 0; tap < 3; tap++) {
+          await page.getByRole('button', { name: 'Zoom in' }).tap();
+          await page.waitForTimeout(300);
+        }
+        await page.waitForTimeout(600);
+        const after = await pageTop();
+        expect(Math.abs(after - before) < 60, `page 4 moved from ${Math.round(before)}px to ${Math.round(after)}px below the top`);
+        await shot(page, 'phone-pdf-zoomed');
+        await page.getByRole('button', { name: /^Reset zoom/ }).tap();
+        await page.waitForTimeout(400);
+      });
+      await check('phone', 'the document title is readable in the status line', async () => {
+        await awake();
+        const title = page.getByTestId('status-title');
+        const box = await title.boundingBox();
+        const text = await title.innerText();
+        expect(box !== null && box.width >= 100, `the title is ${box ? Math.round(box.width) : 0}px wide`);
+        expect(text.startsWith('Must-Do'), `the title reads "${text}"`);
+        await shot(page, 'phone-status-line');
+      });
+      /** Every visible button or select in the music dock, with its box. */
+      const dockControls = (target) =>
+        target
+          .getByRole('region', { name: 'Music', exact: true })
+          .locator('button, select')
+          .evaluateAll((els) =>
+            els
+              .filter((el) => el.offsetParent !== null)
+              .map((el) => {
+                const r = el.getBoundingClientRect();
+                return { name: el.getAttribute('aria-label') || el.tagName, left: r.left, right: r.right, width: r.width, height: r.height };
+              }),
+          );
+      await check('phone', 'every music dock control is on screen with a 44px target', async () => {
+        await awake();
+        const controls = await dockControls(page);
+        const off = controls.filter((c) => c.left < 47.5 || c.right > 360.5);
+        expect(off.length === 0, `off screen: ${off.map((c) => `${c.name} ${Math.round(c.left)}-${Math.round(c.right)}`).join(', ')}`);
+        const small = controls.filter((c) => c.width < 44 || c.height < 44);
+        expect(small.length === 0, `under 44px: ${small.map((c) => `${c.name} ${Math.round(c.width)}x${Math.round(c.height)}`).join(', ')}`);
+        expect(controls.some((c) => c.name === 'Browse music'), 'there is no Browse button');
+        await shot(page, 'phone-dock');
+      });
+      await check('phone', 'Browse opens beside the rail and the sleep timer can be set from it', async () => {
+        await awake();
+        const dock = page.getByRole('region', { name: 'Music', exact: true });
+        await dock.getByRole('button', { name: 'Browse music' }).tap();
+        const panel = page.getByRole('region', { name: 'Browse music' });
+        await panel.waitFor();
+        const box = await panel.boundingBox();
+        expect(box.x >= 47.5 && box.x + box.width <= 360.5, `the panel spans ${Math.round(box.x)}-${Math.round(box.x + box.width)}`);
+        await panel.getByLabel('Sleep timer').selectOption('30');
+        await page.waitForTimeout(300);
+        const text = await dock.innerText();
+        expect(/\d+:\d\d/.test(text), `no countdown in the dock: "${text.replace(/\s+/g, ' ')}"`);
+        await shot(page, 'phone-browse');
+        await panel.getByLabel('Sleep timer').selectOption('0');
+        await dock.getByRole('button', { name: 'Browse music' }).tap();
+      });
+      await check('phone', 'at tablet width (768px) every dock control stays on screen', async () => {
+        const tablet = await openMobile(env, { width: 768, height: 1024 });
+        try {
+          const controls = await dockControls(tablet.page);
+          const off = controls.filter((c) => c.right > 768.5);
+          expect(off.length === 0, `off screen: ${off.map((c) => `${c.name} ${Math.round(c.left)}-${Math.round(c.right)}`).join(', ')}`);
+          expect(controls.some((c) => c.name === 'Browse music'), 'there is no Browse button');
+          await shot(tablet.page, 'tablet-dock');
+        } finally {
+          await tablet.context.close();
+        }
+      });
+      await check('phone', 'every rail button is a 44px target and on screen', async () => {
+        await awake();
+        const buttons = await page
+          .getByRole('navigation', { name: 'Tools' })
+          .getByRole('button')
+          .evaluateAll((els) =>
+            els.map((el) => {
+              const r = el.getBoundingClientRect();
+              return { name: el.getAttribute('aria-label'), top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+            }),
+          );
+        const small = buttons.filter((b) => b.width < 44 || b.height < 44);
+        expect(small.length === 0, `under 44px: ${small.map((b) => `${b.name} ${Math.round(b.width)}x${Math.round(b.height)}`).join(', ')}`);
+        const off = buttons.filter((b) => b.top < 0 || b.bottom > 800);
+        expect(off.length === 0, `off screen: ${off.map((b) => b.name).join(', ')}`);
+        await shot(page, 'phone-rail');
+      });
+      await check('phone', 'the feedback panel fits beside the rail', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Send feedback', exact: true }).tap();
+        const panel = page.getByRole('region', { name: 'Feedback', exact: true });
+        await panel.waitFor();
+        const box = await panel.boundingBox();
+        expect(box.x >= 47.5 && box.x + box.width <= 360.5, `the panel spans ${Math.round(box.x)}-${Math.round(box.x + box.width)}`);
+        await shot(page, 'phone-feedback');
+        await panel.getByRole('button', { name: 'Close feedback' }).tap();
+      });
+    } finally {
+      await context.close();
+    }
   },
 
   async audio(page) {
@@ -465,25 +827,30 @@ const cspViolations = [];
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await context.newPage();
-page.setDefaultTimeout(8000);
 // Never hang: give up if the whole run takes too long.
 const watchdog = setTimeout(() => {
-  console.log('FAIL  watchdog: the run exceeded 4 minutes');
+  console.log('FAIL  watchdog: the run exceeded 8 minutes');
   process.exit(2);
-}, 240000);
+}, 480000);
 const pageErrors = [];
 const consoleErrors = [];
-page.on('pageerror', (error) => pageErrors.push(String(error).slice(0, 200)));
-page.on('console', (message) => {
-  if (/Content Security Policy/i.test(message.text())) cspViolations.push(message.text().slice(0, 240));
-  if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200));
-});
+/** Collects uncaught errors, console errors and CSP violations from a page. */
+function watch(target) {
+  target.setDefaultTimeout(8000);
+  target.on('pageerror', (error) => pageErrors.push(String(error).slice(0, 200)));
+  target.on('console', (message) => {
+    if (/Content Security Policy/i.test(message.text())) cspViolations.push(message.text().slice(0, 240));
+    if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200));
+  });
+}
+watch(page);
+const env = { browser, url: `http://localhost:${PORT}/` };
 
 try {
-  await page.goto(`http://localhost:${PORT}/`);
+  await page.goto(env.url, { timeout: 45000 });
   for (const [name, run] of Object.entries(groups)) {
     if (wanted.length > 0 && !wanted.includes(name)) continue;
-    await run(page);
+    await run(page, env);
   }
 } finally {
   clearTimeout(watchdog);

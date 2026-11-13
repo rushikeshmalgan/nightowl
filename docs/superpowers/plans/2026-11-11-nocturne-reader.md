@@ -8,7 +8,7 @@
 
 **Tech Stack:** Vite, React, TypeScript (strict), Tailwind v4, Zustand, Dexie, `pdfjs-dist`, `ag-psd`, `@supabase/supabase-js`, `vite-plugin-pwa`, `cmdk`, `@fontsource` fonts, Vitest + jsdom + `fake-indexeddb` + Testing Library.
 
-**Spec:** `docs/superpowers/specs/@@@-design.md`
+**Spec:** `docs/superpowers/specs/2026-11-11-nocturne-reader-design.md`
 
 ## Global Constraints
 
@@ -26,7 +26,7 @@
 - PSD size warning above 100 MB. Spotify embed ready timeout 8 s. Presence `track()` calls ≥ 6 s apart. Sleep timer 15/30/60 min with a 5 s fade.
 - YouTube: `youtube-nocookie.com` host, `controls: 0`, visible tile ≥ 200×200 while active. Spotify: no volume control, 30-second previews without a Spotify login.
 - Language tags `EN`, `HI`, `INST`, `NATURE`. Categories: English Focus, Hindi / Bollywood Chill, Instrumental & Classical, Nature & White Noise.
-- TypeScript only; no `any` without a one-line comment. Work on branch `feat/@@@`. Data-layer tests start with `// @vitest-environment node` (Node `Blob`/`File` + `fake-indexeddb`); component and hook tests use jsdom. The prototype `nightowl_reader_night_document_platform.tsx` stays untouched until Task 32.
+- TypeScript only; no `any` without a one-line comment. Work on branch `feat/nocturne-rebuild`. Data-layer tests start with `// @vitest-environment node` (Node `Blob`/`File` + `fake-indexeddb`); component and hook tests use jsdom. The prototype `nightowl_reader_night_document_platform.tsx` stays untouched until Task 32.
 
 ## Review Focus
 
@@ -49,7 +49,7 @@
 **Interfaces:**
 - Produces: npm scripts `dev`, `build` (`tsc --noEmit && vite build`), `preview`, `test` (`vitest run`), `typecheck` (`tsc --noEmit`); Vitest default env jsdom with globals and jest-dom; `export default function App()`.
 
-- [ ] **Step 1: Branch and install.** Run `git switch -c feat/@@@`. Write the config files, then install runtime deps `react react-dom zustand dexie pdfjs-dist ag-psd @supabase/supabase-js cmdk lucide-react @fontsource-variable/geist @fontsource-variable/geist-mono @fontsource-variable/newsreader @fontsource/opendyslexic` and dev deps `vite @vitejs/plugin-react typescript tailwindcss @tailwindcss/vite vite-plugin-pwa vitest jsdom fake-indexeddb @testing-library/react @testing-library/user-event @testing-library/jest-dom @types/react @types/react-dom`. Check each font name with `npm view <name> version`; if one does not exist use the `@fontsource/<name>` equivalent. `.env.example` lists the three env vars, empty, with a comment each.
+- [ ] **Step 1: Branch and install.** Run `git switch -c feat/nocturne-rebuild`. Write the config files, then install runtime deps `react react-dom zustand dexie pdfjs-dist ag-psd @supabase/supabase-js cmdk lucide-react @fontsource-variable/geist @fontsource-variable/geist-mono @fontsource-variable/newsreader @fontsource/opendyslexic` and dev deps `vite @vitejs/plugin-react typescript tailwindcss @tailwindcss/vite vite-plugin-pwa vitest jsdom fake-indexeddb @testing-library/react @testing-library/user-event @testing-library/jest-dom @types/react @types/react-dom`. Check each font name with `npm view <name> version`; if one does not exist use the `@fontsource/<name>` equivalent. `.env.example` lists the three env vars, empty, with a comment each.
 - [ ] **Step 2: Write the failing test** `src/App.test.tsx`: `render(<App />); expect(screen.getByRole('application', { name: 'NightOwl Reader' })).toBeInTheDocument()`. Run `npx vitest run src/App.test.tsx`. Expected: FAIL (`App` missing).
 - [ ] **Step 3: Implement** `App` rendering `<div role="application" aria-label="NightOwl Reader">`; `main.tsx` mounts it; `index.css` has `@import "tailwindcss";` and imports the four font packages; `vitest.setup.ts` imports `@testing-library/jest-dom/vitest` and polyfills `ResizeObserver` and `Element.prototype.scrollIntoView` (needed by `cmdk`).
 - [ ] **Step 4: Verify.** `npm test`, `npm run typecheck` and `npm run build` all pass.

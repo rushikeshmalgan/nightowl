@@ -45,6 +45,10 @@ describe('buildCsp', () => {
     expect(connect).not.toContain('supabase');
   });
 
+  it('allows sending feedback through the form service', () => {
+    expect(directive(policy, 'connect-src').split(' ')).toContain('https://api.web3forms.com');
+  });
+
   it('adds the Supabase project for presence', () => {
     const connect = directive(buildCsp({ supabaseUrl: 'https://abc.supabase.co' }), 'connect-src').split(' ');
     expect(connect).toEqual(expect.arrayContaining(['https://abc.supabase.co', 'wss://abc.supabase.co']));
