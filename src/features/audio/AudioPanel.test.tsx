@@ -73,6 +73,21 @@ describe('AudioPanel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Audio is blocked until you click or press a key.');
   });
 
+  it('has a Close panel button when it is given a way to close', () => {
+    const onClose = vi.fn();
+    setup({ onClose });
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a bottom sheet below sm and a side drawer from sm up', () => {
+    setup();
+    const classes = screen.getByRole('region', { name: 'Ambient sound' }).className;
+    expect(classes).toContain('max-sm:max-h-[75dvh]');
+    expect(classes).toContain('max-sm:bottom-14');
+    expect(classes).toContain('w-72');
+  });
+
   it('says where the sound comes from while playing', () => {
     setup({ state: { ...idle, playing: true, source: 'synth' } });
     expect(screen.getByText('Synthesized')).toBeInTheDocument();

@@ -148,6 +148,21 @@ describe('LibraryPanel', () => {
     });
   });
 
+  it('has a Close panel button when it is given a way to close', () => {
+    const onClose = vi.fn();
+    setup({ onClose });
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a bottom sheet below sm and a side drawer from sm up', () => {
+    setup();
+    const classes = screen.getByRole('region', { name: 'Library' }).className;
+    expect(classes).toContain('max-sm:max-h-[75dvh]');
+    expect(classes).toContain('max-sm:bottom-14');
+    expect(classes).toContain('w-72');
+  });
+
   it('says so when the library is empty', () => {
     setup({ documents: [], currentId: null });
     expect(screen.getByText(/No documents yet/)).toBeInTheDocument();

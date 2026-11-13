@@ -13,7 +13,7 @@ export function SheetHandle({ onClose }: { onClose(): void }) {
   const startY = useRef<number | null>(null);
 
   return (
-    <div data-testid="sheet-header" className="flex shrink-0 items-center border-b border-line sm:hidden">
+    <div data-testid="sheet-header" className="sticky top-0 z-10 flex shrink-0 items-center border-b border-line bg-surface sm:hidden">
       <div
         data-testid="sheet-handle"
         className="flex h-11 flex-1 cursor-grab items-center justify-center"

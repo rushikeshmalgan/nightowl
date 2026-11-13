@@ -3,6 +3,8 @@ import type { SleepControls, SleepMinutes } from './useSleepTimer';
 import type { AudioEngineState } from './engine';
 import { AUDIO_TRACKS } from './tracks';
 import type { TrackId } from './tracks';
+import { SHEET_LAYOUT } from '../shell/sheet';
+import { SheetHandle } from '../shell/SheetHandle';
 import { LedPulse } from './LedPulse';
 import { Scrubber } from '../../shared/Scrubber';
 import { Waveform } from './Waveform';
@@ -13,6 +15,8 @@ export interface AudioPanelProps {
   /** Current loudness, 0 to 1. */
   level: number;
   sleep: SleepControls;
+  /** Lets a phone dismiss the panel from its handle. */
+  onClose?(): void;
   onToggle(): void;
   onTrack(id: TrackId): void;
   onVolume(volume: number): void;
@@ -36,12 +40,14 @@ export function formatCountdown(ms: number): string {
 }
 
 /** Controls for the built-in ambient sound. */
-export function AudioPanel({ state, analyser, level, sleep, onToggle, onTrack, onVolume }: AudioPanelProps) {
+export function AudioPanel({ state, analyser, level, sleep, onClose, onToggle, onTrack, onVolume }: AudioPanelProps) {
   return (
     <section
       aria-label="Ambient sound"
-      className="absolute bottom-0 left-12 top-8 flex w-72 flex-col gap-4 overflow-y-auto border-r border-line bg-surface p-3"
+      className={`absolute bottom-0 left-12 top-8 flex w-72 flex-col overflow-y-auto border-r border-line bg-surface ${SHEET_LAYOUT}`}
     >
+      {onClose ? <SheetHandle onClose={onClose} /> : null}
+      <div className="flex flex-col gap-4 p-3">
       <div className="flex items-center justify-between">
         <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted">Night noise</h2>
         <span className="flex items-center gap-2 font-mono text-[10px] text-muted">
@@ -118,6 +124,7 @@ export function AudioPanel({ state, analyser, level, sleep, onToggle, onTrack, o
             </button>
           ))}
         </div>
+      </div>
       </div>
     </section>
   );

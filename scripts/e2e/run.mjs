@@ -129,6 +129,16 @@ const groups = {
       await panel.getByRole('button', { name: 'Close feedback' }).click();
       return hasKey ? 'send mode' : 'email-app mode';
     });
+    await check('shell', 'on desktop the library is still a 288px side drawer with no backdrop', async () => {
+      await wake(page);
+      await page.getByRole('button', { name: 'Library', exact: true }).click();
+      const library = page.getByRole('region', { name: 'Library', exact: true });
+      const box = await library.boundingBox();
+      expect(box && Math.round(box.width) === 288 && Math.round(box.x) === 48, `library box was ${JSON.stringify(box)}`);
+      expect((await page.getByTestId('sheet-backdrop').isVisible()) === false, 'the phone backdrop shows on desktop');
+      expect((await library.getByTestId('sheet-header').isVisible()) === false, 'the phone handle shows on desktop');
+      await page.getByRole('button', { name: 'Library', exact: true }).click();
+    });
     await check('shell', 'chrome fades after 3 s of no input and wakes on movement', async () => {
       await page.mouse.move(600, 400);
       await page.waitForTimeout(3500);
@@ -440,6 +450,11 @@ const groups = {
     const { context, page } = await openMobile(env);
     try {
       const tuning = page.getByRole('complementary', { name: 'Tuning' });
+      /** Touch has no hover: tap empty reading space to wake the faded chrome. */
+      const awake = async () => {
+        await page.touchscreen.tap(250, 560);
+        await page.waitForFunction(() => document.querySelector('[data-testid="chrome"]')?.dataset.idle === 'false');
+      };
       await check('mobile', 'nothing scrolls sideways at 375px', async () => {
         const widths = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: innerWidth }));
         expect(widths.doc <= widths.view, `document is ${widths.doc}px wide in a ${widths.view}px window`);
@@ -454,6 +469,61 @@ const groups = {
         await page.waitForTimeout(300);
         expect((await tuning.getAttribute('data-open')) === 'false', 'the tuning panel opened');
         expect((await page.getByTestId('tuning-hover-strip').count()) === 0, 'the hover strip exists on touch');
+      });
+
+      const sheets = [
+        { label: 'Tuning', panel: tuning, closed: async () => (await tuning.getAttribute('data-open')) === 'false' },
+        { label: 'Library', panel: page.getByRole('region', { name: 'Library', exact: true }), closed: async () => (await page.getByRole('region', { name: 'Library', exact: true }).count()) === 0 },
+        { label: 'Ambient sound', panel: page.getByRole('region', { name: 'Ambient sound' }), closed: async () => (await page.getByRole('region', { name: 'Ambient sound' }).count()) === 0 },
+      ];
+      for (const sheet of sheets) {
+        const open = async () => {
+          await awake();
+          await page.getByRole('button', { name: sheet.label, exact: true }).tap();
+          await page.waitForTimeout(350);
+        };
+        await check('mobile', `${sheet.label} opens as a bottom sheet above the dock, leaving the document visible`, async () => {
+          await open();
+          const box = await sheet.panel.boundingBox();
+          expect(box !== null, 'the sheet has no box');
+          expect(Math.round(box.width) === 375, `width was ${box.width}`);
+          expect(box.height <= 0.75 * 667 + 1, `height ${box.height} is more than 75% of the screen`);
+          expect(box.y + box.height <= 667 - 56 + 1, `bottom edge ${box.y + box.height} overlaps the 56px dock`);
+          expect(box.y >= 100, `top edge ${box.y} leaves under 100px of the document visible`);
+          await shot(page, `mobile-sheet-${sheet.label.replace(/\W+/g, '-').toLowerCase()}`);
+        });
+        await check('mobile', `a tap outside dismisses the ${sheet.label} sheet`, async () => {
+          await page.touchscreen.tap(187, 30);
+          await page.waitForTimeout(350);
+          expect(await sheet.closed(), 'the sheet is still open');
+        });
+        await check('mobile', `swiping the ${sheet.label} handle down dismisses it`, async () => {
+          await open();
+          const handle = await sheet.panel.getByTestId('sheet-handle').boundingBox();
+          const x = handle.x + handle.width / 2;
+          const y = handle.y + handle.height / 2;
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x, y + 90, { steps: 6 });
+          await page.mouse.up();
+          await page.waitForTimeout(350);
+          expect(await sheet.closed(), 'the sheet is still open after the swipe');
+        });
+      }
+      await check('mobile', 'the close button dismisses the sheet', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        await page.getByRole('region', { name: 'Library', exact: true }).getByRole('button', { name: 'Close panel' }).tap();
+        await page.waitForTimeout(350);
+        expect((await page.getByRole('region', { name: 'Library', exact: true }).count()) === 0, 'still open');
+      });
+      await check('mobile', 'rotating to landscape does not leave the closed tuning panel on screen', async () => {
+        await page.setViewportSize({ width: 800, height: 375 });
+        await page.waitForTimeout(400);
+        const box = await tuning.boundingBox();
+        expect(box === null || box.x >= 800 || box.y >= 375, `the closed panel sits at ${JSON.stringify(box)}`);
+        await page.setViewportSize({ width: 375, height: 667 });
+        await page.waitForTimeout(300);
       });
     } finally {
       await context.close();

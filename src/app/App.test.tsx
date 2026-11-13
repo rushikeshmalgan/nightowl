@@ -204,6 +204,60 @@ describe('App tuning hover strip', () => {
   });
 });
 
+describe('App sheet backdrop', () => {
+  beforeEach(() => {
+    resetFakes();
+    act(() => useUi.getState().reset());
+  });
+
+  it('is absent while every panel is closed', async () => {
+    await renderApp();
+    expect(screen.queryByTestId('sheet-backdrop')).not.toBeInTheDocument();
+  });
+
+  it.each([['tuningOpen'], ['libraryOpen'], ['audioOpen']] as const)(
+    'appears with the %s panel and closes it when tapped',
+    async (key) => {
+      await renderApp();
+      act(() => useUi.getState().set(key, true));
+      const backdrop = screen.getByTestId('sheet-backdrop');
+      expect(backdrop).toHaveClass('sm:hidden');
+      expect(backdrop).toHaveAccessibleName('Close panel');
+      fireEvent.click(backdrop);
+      expect(useUi.getState()[key]).toBe(false);
+      expect(screen.queryByTestId('sheet-backdrop')).not.toBeInTheDocument();
+    },
+  );
+
+  it('closes every sheet at once', async () => {
+    await renderApp();
+    act(() => {
+      useUi.getState().set('tuningOpen', true);
+      useUi.getState().set('libraryOpen', true);
+    });
+    fireEvent.click(screen.getByTestId('sheet-backdrop'));
+    const s = useUi.getState();
+    expect([s.tuningOpen, s.libraryOpen, s.audioOpen]).toEqual([false, false, false]);
+  });
+
+  it('on a phone, opening the library closes the tuning panel', async () => {
+    setMedia({ narrow: true });
+    await renderApp();
+    act(() => useUi.getState().set('tuningOpen', true));
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    expect(useUi.getState().libraryOpen).toBe(true);
+    expect(useUi.getState().tuningOpen).toBe(false);
+  });
+
+  it('closes the library from its own handle', async () => {
+    await renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    const library = await screen.findByRole('region', { name: 'Library' });
+    fireEvent.click(within(library).getByRole('button', { name: 'Close panel' }));
+    expect(useUi.getState().libraryOpen).toBe(false);
+  });
+});
+
 describe('App library', () => {
   beforeEach(() => {
     resetFakes();

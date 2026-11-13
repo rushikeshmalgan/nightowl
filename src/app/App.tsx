@@ -20,7 +20,8 @@ import { TuningPanel } from '../features/shell/TuningPanel';
 import { WarmthOverlay } from '../features/shell/WarmthOverlay';
 import { useAudioEngine } from '../features/audio/useAudioEngine';
 import { useAudioLevel } from '../features/audio/useAudioLevel';
-import { FINE_HOVER_QUERY, useMediaQuery } from '../shared/useMediaQuery';
+import { FINE_HOVER_QUERY, NARROW_QUERY, useMediaQuery } from '../shared/useMediaQuery';
+import { useExclusiveSheets } from '../features/shell/useExclusiveSheets';
 import { useBookmarks } from '../features/reader/useBookmarks';
 import { useHighlights } from '../features/reader/useHighlights';
 import { useHotkeys } from '../features/shell/useHotkeys';
@@ -199,6 +200,15 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   const tuningOpenedByHover = useRef(false);
   // Hover-to-open is for a mouse. On touch, a scroll or swipe near the edge must not open anything.
   const canHover = useMediaQuery(FINE_HOVER_QUERY);
+  const narrow = useMediaQuery(NARROW_QUERY);
+  useExclusiveSheets(narrow);
+  const sheetOpen = ui.tuningOpen || ui.libraryOpen || ui.audioOpen;
+  const closeSheets = () => {
+    tuningOpenedByHover.current = false;
+    ui.set('tuningOpen', false);
+    ui.set('libraryOpen', false);
+    ui.set('audioOpen', false);
+  };
 
   useHotkeys({
     'mod+k': () => ui.toggle('paletteOpen'),
@@ -374,6 +384,18 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
           ) : null}
         </StatusLine>
 
+        {/* On a phone, a tap outside the open sheet dismisses it. */}
+        {sheetOpen ? (
+          <button
+            type="button"
+            data-testid="sheet-backdrop"
+            aria-label="Close panel"
+            tabIndex={-1}
+            onClick={closeSheets}
+            className="motion-fade absolute inset-0 bg-black/50 sm:hidden"
+          />
+        ) : null}
+
         {ui.libraryOpen ? (
           <LibraryPanel
             documents={cache.documents}
@@ -383,6 +405,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
             bookmarks={bookmarks.bookmarks}
             notice={notice}
             confirmClear={confirmClear}
+            onClose={() => ui.set('libraryOpen', false)}
             onOpen={(id) => {
               void openDoc(id).then((opened) => {
                 if (opened) useUi.getState().set('libraryOpen', false);
@@ -409,6 +432,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
             analyser={audio.analyser}
             level={level}
             sleep={sleep}
+            onClose={() => ui.set('audioOpen', false)}
             onToggle={() => void audio.toggle()}
             onTrack={(id) => void audio.setTrack(id)}
             onVolume={audio.setVolume}

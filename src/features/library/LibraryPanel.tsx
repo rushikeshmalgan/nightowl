@@ -4,6 +4,8 @@ import { ACCEPT_ATTR } from './fileTypes';
 import { formatBytes } from '../../shared/format';
 import type { Usage } from './library';
 import type { BookmarkRecord, DocMeta, DocType, HighlightRecord } from '../../shared/types';
+import { SHEET_LAYOUT } from '../shell/sheet';
+import { SheetHandle } from '../shell/SheetHandle';
 import { StoragePanel } from './StoragePanel';
 
 export interface LibraryPanelProps {
@@ -16,6 +18,8 @@ export interface LibraryPanelProps {
   notice: string | null;
   /** Open with the delete confirmation already showing (from the palette). */
   confirmClear?: boolean;
+  /** Lets a phone dismiss the panel from its handle. */
+  onClose?(): void;
   onOpen(id: string): void;
   onRemove(id: string): void;
   onImport(files: File[]): void;
@@ -103,6 +107,7 @@ export function LibraryPanel({
   bookmarks,
   notice,
   confirmClear = false,
+  onClose,
   onOpen,
   onRemove,
   onImport,
@@ -123,8 +128,9 @@ export function LibraryPanel({
   return (
     <section
       aria-label="Library"
-      className="absolute bottom-0 left-12 top-8 flex w-72 flex-col border-r border-line bg-surface"
+      className={`absolute bottom-0 left-12 top-8 flex w-72 flex-col border-r border-line bg-surface ${SHEET_LAYOUT}`}
     >
+      {onClose ? <SheetHandle onClose={onClose} /> : null}
       <div className="flex items-center justify-between border-b border-line px-3 py-2">
         <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted">Library</h2>
         <label className="motion-color flex cursor-pointer items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-muted hover:text-ink focus-within:ring-1 focus-within:ring-accent">

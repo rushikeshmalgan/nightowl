@@ -1,8 +1,11 @@
 import { RotateCcw } from 'lucide-react';
+import { NARROW_QUERY, useMediaQuery } from '../../shared/useMediaQuery';
 import { KELVIN_MAX, KELVIN_MIN } from './warmth';
 import { useUi } from './ui';
 import type { ThemeId } from '../../shared/types';
 import { Scrubber } from '../../shared/Scrubber';
+import { SHEET_LAYOUT } from './sheet';
+import { SheetHandle } from './SheetHandle';
 
 const THEMES: Array<{ id: ThemeId; label: string }> = [
   { id: 'night', label: 'Night' },
@@ -40,6 +43,9 @@ function Toggle({ label, pressed, onClick }: { label: string; pressed: boolean; 
 export function TuningPanel({ onMouseLeave }: { onMouseLeave?: () => void }) {
   const ui = useUi();
   const open = ui.tuningOpen;
+  const narrow = useMediaQuery(NARROW_QUERY);
+  // Closed, it waits off the right edge on a wide screen and below the bottom edge on a phone.
+  const offscreen = narrow ? 'translateY(100%)' : 'translateX(100%)';
 
   return (
     <aside
@@ -48,9 +54,10 @@ export function TuningPanel({ onMouseLeave }: { onMouseLeave?: () => void }) {
       data-open={open}
       inert={!open}
       onMouseLeave={onMouseLeave}
-      className="motion-slide absolute bottom-0 right-0 top-8 flex w-72 flex-col overflow-y-auto border-l border-line bg-surface"
-      style={{ transform: open ? 'translateX(0)' : 'translateX(100%)' }}
+      className={`motion-slide absolute bottom-0 right-0 top-8 flex w-72 flex-col overflow-y-auto border-l border-line bg-surface ${SHEET_LAYOUT}`}
+      style={{ transform: open ? 'none' : offscreen }}
     >
+      <SheetHandle onClose={() => ui.set('tuningOpen', false)} />
       <Section title="Theme">
         <div className="grid grid-cols-4 gap-1">
           {THEMES.map((theme) => (
