@@ -4,6 +4,7 @@ import App from './App';
 import { useUi } from '../features/shell/ui';
 import { resetFakes, state } from '../test/fakes';
 import { makeFakeAdapters } from '../test/fakeAdapter';
+import { setMedia } from '../test/media';
 import type { DefaultAdapters } from '../features/music/defaultAdapters';
 
 vi.mock('../shared/db', async () => (await import('../test/fakes')).fakeDbModule);
@@ -161,6 +162,45 @@ describe('App shell', () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
     expect(screen.getByTestId('chrome').style.opacity).toBe('1');
+  });
+});
+
+describe('App tuning hover strip', () => {
+  beforeEach(() => {
+    resetFakes();
+    act(() => useUi.getState().reset());
+  });
+
+  it('opens the tuning panel on hover with a mouse, and closes when the pointer leaves', async () => {
+    await renderApp();
+    const panel = screen.getByRole('complementary', { name: 'Tuning' });
+    fireEvent.mouseEnter(screen.getByTestId('tuning-hover-strip'));
+    expect(panel).toHaveAttribute('data-open', 'true');
+    fireEvent.mouseLeave(panel);
+    expect(panel).toHaveAttribute('data-open', 'false');
+  });
+
+  it('has no hover strip on a touch device, so a swipe cannot open the panel', async () => {
+    setMedia({ hover: false });
+    await renderApp();
+    expect(screen.queryByTestId('tuning-hover-strip')).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Tuning' })).toHaveAttribute('data-open', 'false');
+  });
+
+  it('adds and removes the strip as the device changes, without a reload', async () => {
+    await renderApp();
+    expect(screen.getByTestId('tuning-hover-strip')).toBeInTheDocument();
+    act(() => setMedia({ hover: false }));
+    expect(screen.queryByTestId('tuning-hover-strip')).not.toBeInTheDocument();
+    act(() => setMedia({ hover: true }));
+    expect(screen.getByTestId('tuning-hover-strip')).toBeInTheDocument();
+  });
+
+  it('still opens from an explicit tap on a touch device', async () => {
+    setMedia({ hover: false });
+    await renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'Tuning' }));
+    expect(screen.getByRole('complementary', { name: 'Tuning' })).toHaveAttribute('data-open', 'true');
   });
 });
 

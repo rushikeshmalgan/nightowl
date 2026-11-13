@@ -20,6 +20,7 @@ import { TuningPanel } from '../features/shell/TuningPanel';
 import { WarmthOverlay } from '../features/shell/WarmthOverlay';
 import { useAudioEngine } from '../features/audio/useAudioEngine';
 import { useAudioLevel } from '../features/audio/useAudioLevel';
+import { FINE_HOVER_QUERY, useMediaQuery } from '../shared/useMediaQuery';
 import { useBookmarks } from '../features/reader/useBookmarks';
 import { useHighlights } from '../features/reader/useHighlights';
 import { useHotkeys } from '../features/shell/useHotkeys';
@@ -196,6 +197,8 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   const { idle } = useIdleFade({ enabled: !panelOpen });
 
   const tuningOpenedByHover = useRef(false);
+  // Hover-to-open is for a mouse. On touch, a scroll or swipe near the edge must not open anything.
+  const canHover = useMediaQuery(FINE_HOVER_QUERY);
 
   useHotkeys({
     'mod+k': () => ui.toggle('paletteOpen'),
@@ -416,17 +419,20 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
           <FeedbackPanel accessKey={import.meta.env.VITE_FEEDBACK_KEY?.trim() || undefined} online={online} onClose={() => setFeedbackOpen(false)} />
         ) : null}
 
-        {/* Hovering the right edge slides the tuning panel out. */}
-        <div
-          aria-hidden="true"
-          className="absolute bottom-0 right-0 top-8 w-2"
-          onMouseEnter={() => {
-            if (!ui.tuningOpen) {
-              tuningOpenedByHover.current = true;
-              ui.set('tuningOpen', true);
-            }
-          }}
-        />
+        {/* Hovering the right edge slides the tuning panel out (mouse only). */}
+        {canHover ? (
+          <div
+            aria-hidden="true"
+            data-testid="tuning-hover-strip"
+            className="absolute bottom-0 right-0 top-8 w-2"
+            onMouseEnter={() => {
+              if (!ui.tuningOpen) {
+                tuningOpenedByHover.current = true;
+                ui.set('tuningOpen', true);
+              }
+            }}
+          />
+        ) : null}
         <TuningPanel
           onMouseLeave={() => {
             if (tuningOpenedByHover.current) {

@@ -6,6 +6,7 @@
 // Starts its own Vite dev server and drives the Edge or Chrome already
 // installed on this machine (no browser download). Exits non-zero on failure.
 import { spawnSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -75,6 +76,28 @@ async function importFile(page, upload) {
 async function libraryNames(page) {
   const panel = await openLibrary(page);
   return panel.getByRole('button', { name: /^Open / }).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
+}
+
+/** A 375x667 phone: touch input, mobile viewport, no hover. Fresh storage, so the seed library is present. */
+async function openMobile(env) {
+  const context = await env.browser.newContext({
+    viewport: { width: 375, height: 667 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  watch(page);
+  await page.goto(env.url, { timeout: 45000 });
+  await page.waitForSelector('[data-testid="status-title"]');
+  await page.waitForSelector('article');
+  return { context, page };
+}
+
+const SHOTS = join(root, '.e2e-shots');
+async function shot(page, name) {
+  mkdirSync(SHOTS, { recursive: true });
+  await page.screenshot({ path: join(SHOTS, `${name}.png` ) });
 }
 
 const groups = {
@@ -413,6 +436,30 @@ const groups = {
     await page.context().setOffline(false);
   },
 
+  async mobile(_desktop, env) {
+    const { context, page } = await openMobile(env);
+    try {
+      const tuning = page.getByRole('complementary', { name: 'Tuning' });
+      await check('mobile', 'nothing scrolls sideways at 375px', async () => {
+        const widths = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: innerWidth }));
+        expect(widths.doc <= widths.view, `document is ${widths.doc}px wide in a ${widths.view}px window`);
+        await shot(page, 'mobile-closed');
+      });
+      await check('mobile', 'the emulated phone has no mouse hover', async () => {
+        const hover = await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches);
+        expect(hover === false, 'the phone reports a hovering fine pointer');
+      });
+      await check('mobile', 'a touch on the right edge does not open the tuning panel', async () => {
+        await page.touchscreen.tap(372, 300);
+        await page.waitForTimeout(300);
+        expect((await tuning.getAttribute('data-open')) === 'false', 'the tuning panel opened');
+        expect((await page.getByTestId('tuning-hover-strip').count()) === 0, 'the hover strip exists on touch');
+      });
+    } finally {
+      await context.close();
+    }
+  },
+
   async audio(page) {
     const panel = page.getByRole('region', { name: 'Ambient sound' });
     const level = () => panel.getByTestId('led').evaluate((el) => Number(el.dataset.level));
@@ -488,25 +535,30 @@ const cspViolations = [];
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await context.newPage();
-page.setDefaultTimeout(8000);
 // Never hang: give up if the whole run takes too long.
 const watchdog = setTimeout(() => {
-  console.log('FAIL  watchdog: the run exceeded 4 minutes');
+  console.log('FAIL  watchdog: the run exceeded 8 minutes');
   process.exit(2);
-}, 240000);
+}, 480000);
 const pageErrors = [];
 const consoleErrors = [];
-page.on('pageerror', (error) => pageErrors.push(String(error).slice(0, 200)));
-page.on('console', (message) => {
-  if (/Content Security Policy/i.test(message.text())) cspViolations.push(message.text().slice(0, 240));
-  if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200));
-});
+/** Collects uncaught errors, console errors and CSP violations from a page. */
+function watch(target) {
+  target.setDefaultTimeout(8000);
+  target.on('pageerror', (error) => pageErrors.push(String(error).slice(0, 200)));
+  target.on('console', (message) => {
+    if (/Content Security Policy/i.test(message.text())) cspViolations.push(message.text().slice(0, 240));
+    if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200));
+  });
+}
+watch(page);
+const env = { browser, url: `http://localhost:${PORT}/` };
 
 try {
-  await page.goto(`http://localhost:${PORT}/`);
+  await page.goto(env.url, { timeout: 45000 });
   for (const [name, run] of Object.entries(groups)) {
     if (wanted.length > 0 && !wanted.includes(name)) continue;
-    await run(page);
+    await run(page, env);
   }
 } finally {
   clearTimeout(watchdog);
