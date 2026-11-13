@@ -23,24 +23,48 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Toggle({ label, pressed, onClick }: { label: string; pressed: boolean; onClick(): void }) {
+function Toggle({
+  label,
+  pressed,
+  onClick,
+  blockedReason,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick(): void;
+  /** When set the toggle is disabled and the reason is printed beneath it. */
+  blockedReason?: string | null;
+}) {
+  const blocked = Boolean(blockedReason);
   return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className={`motion-color flex items-center justify-between rounded border border-line px-2 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-accent ${
-        pressed ? 'bg-active text-ink' : 'text-muted hover:text-ink'
-      }`}
-    >
-      <span>{label}</span>
-      <span className="font-mono text-[10px]">{pressed ? 'ON' : 'OFF'}</span>
-    </button>
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        aria-pressed={blocked ? undefined : pressed}
+        disabled={blocked}
+        title={blockedReason ?? undefined}
+        onClick={onClick}
+        className={`motion-color flex items-center justify-between rounded border border-line px-2 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50 ${
+          pressed && !blocked ? 'bg-active text-ink' : 'text-muted hover:text-ink disabled:hover:text-muted'
+        }`}
+      >
+        <span>{label}</span>
+        <span className="font-mono text-[10px]">{blocked ? '—' : pressed ? 'ON' : 'OFF'}</span>
+      </button>
+      {blocked ? <p className="text-[11px] leading-snug text-muted">{blockedReason}</p> : null}
+    </div>
   );
 }
 
 /** The slide-out panel of reading controls on the right edge. */
-export function TuningPanel({ onMouseLeave }: { onMouseLeave?: () => void }) {
+export function TuningPanel({
+  onMouseLeave,
+  dyslexicBlockedReason = null,
+}: {
+  onMouseLeave?: () => void;
+  /** Why the dyslexia-friendly font cannot apply to the open document, if it cannot. */
+  dyslexicBlockedReason?: string | null;
+}) {
   const ui = useUi();
   const open = ui.tuningOpen;
   const narrow = useMediaQuery(NARROW_QUERY);
@@ -135,7 +159,12 @@ export function TuningPanel({ onMouseLeave }: { onMouseLeave?: () => void }) {
           format={(v) => `${v}%`}
           onChange={(v) => ui.set('zoom', v)}
         />
-        <Toggle label="Dyslexia-friendly font" pressed={ui.dyslexic} onClick={() => ui.toggle('dyslexic')} />
+        <Toggle
+          label="Dyslexia-friendly font"
+          pressed={ui.dyslexic}
+          onClick={() => ui.toggle('dyslexic')}
+          blockedReason={dyslexicBlockedReason}
+        />
       </Section>
 
       <Section title="Pace">

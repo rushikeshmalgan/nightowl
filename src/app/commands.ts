@@ -19,6 +19,8 @@ export interface CommandDeps {
   openFeedback?(): void;
   /** The music dock. */
   music?: { select(source: 'noise' | 'spotify' | 'youtube' | 'tracks'): void; toggle(): void };
+  /** Text-styling commands that cannot act on the open document are left out of the palette. */
+  blocked?: { bionic?: boolean; dyslexic?: boolean };
 }
 
 const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
@@ -29,7 +31,7 @@ const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
 ];
 
 /** The static command list for the palette. Later features append their own. */
-export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music, openFeedback }: CommandDeps): Command[] {
+export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music, openFeedback, blocked }: CommandDeps): Command[] {
   const commands: Command[] = [
     ...(openDocument
       ? documents.map<Command>((doc) => ({
@@ -47,11 +49,15 @@ export function buildCommands({ ui, tts, documents = [], openDocument, requestCl
       keywords: ['colour', 'color', 'palette'],
       run: () => ui.set('theme', theme.id),
     })),
-    { id: 'bionic', title: 'Toggle bionic reading', group: 'View', hotkey: 'mod+b', run: () => ui.toggle('bionic') },
+    ...(blocked?.bionic
+      ? []
+      : [{ id: 'bionic', title: 'Toggle bionic reading', group: 'View', hotkey: 'mod+b', run: () => ui.toggle('bionic') } satisfies Command]),
     { id: 'ruler', title: 'Toggle focus ruler', group: 'View', hotkey: 'f', run: () => ui.toggle('focusRuler') },
     { id: 'autoscroll', title: 'Toggle auto-scroll', group: 'View', run: () => ui.toggle('autoScroll') },
     { id: 'night-pages', title: 'Toggle night pages', group: 'View', keywords: ['pdf', 'invert', 'dark'], run: () => ui.toggle('nightPages') },
-    { id: 'dyslexic', title: 'Toggle dyslexia-friendly font', group: 'View', run: () => ui.toggle('dyslexic') },
+    ...(blocked?.dyslexic
+      ? []
+      : [{ id: 'dyslexic', title: 'Toggle dyslexia-friendly font', group: 'View', run: () => ui.toggle('dyslexic') } satisfies Command]),
     { id: 'tuning', title: 'Open tuning panel', group: 'View', hotkey: '\\', keywords: ['settings', 'warmth', 'brightness'], run: () => ui.set('tuningOpen', true) },
     { id: 'reset', title: 'Reset reading settings', group: 'View', run: () => ui.reset() },
   ];

@@ -9,6 +9,35 @@ beforeEach(() => {
   act(() => useUi.getState().reset());
 });
 
+describe('TuningPanel dyslexia font', () => {
+  const reason = 'The dyslexia-friendly font is not available for PDF pages.';
+
+  it('is a normal toggle when nothing blocks it', () => {
+    render(<TuningPanel />);
+    const toggle = screen.getByRole('button', { name: /Dyslexia-friendly font/ });
+    expect(toggle).toBeEnabled();
+    fireEvent.click(toggle);
+    expect(useUi.getState().dyslexic).toBe(true);
+  });
+
+  it('is disabled with the reason shown in the panel, not just in a tooltip', () => {
+    render(<TuningPanel dyslexicBlockedReason={reason} />);
+    expect(screen.getByRole('button', { name: /Dyslexia-friendly font/ })).toBeDisabled();
+    expect(screen.getByText(reason)).toBeVisible();
+  });
+
+  it('ignores a click while blocked', () => {
+    render(<TuningPanel dyslexicBlockedReason={reason} />);
+    fireEvent.click(screen.getByRole('button', { name: /Dyslexia-friendly font/ }));
+    expect(useUi.getState().dyslexic).toBe(false);
+  });
+
+  it('shows a dash instead of ON or OFF while blocked', () => {
+    render(<TuningPanel dyslexicBlockedReason={reason} />);
+    expect(screen.getByRole('button', { name: /Dyslexia-friendly font/ })).toHaveTextContent('—');
+  });
+});
+
 describe('TuningPanel placement', () => {
   it('slides off the right edge when closed on a wide screen', () => {
     render(<TuningPanel />);

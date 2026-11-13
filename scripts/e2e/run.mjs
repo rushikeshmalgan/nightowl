@@ -558,6 +558,50 @@ const groups = {
         expect(wide <= 375, `the page body is ${wide}px wide`);
         await shot(page, 'mobile-pdf-zoom');
       });
+      // phone.pdf is still open from the check above.
+      await check('mobile', 'on a PDF the Bionic button is disabled and says why', async () => {
+        await awake();
+        const bionic = page.getByRole('button', { name: 'Bionic reading', exact: true });
+        expect(await bionic.isDisabled(), 'the Bionic button is still enabled on a PDF');
+        const title = await bionic.getAttribute('title');
+        expect(title === 'Bionic reading is not available for PDF pages.', `title was ${title}`);
+        await page.keyboard.press('Control+b');
+        await page.waitForTimeout(150);
+        const flagged = (await page.getByTestId('status-title').locator('xpath=..').innerText()).includes('Bionic');
+        expect(!flagged, 'the status line shows a Bionic flag on a PDF');
+      });
+      await check('mobile', 'on a PDF the dyslexia font is disabled in the sheet, with the reason on screen', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Tuning', exact: true }).tap();
+        const sheet = page.getByRole('complementary', { name: 'Tuning' });
+        await page.waitForFunction(() => document.querySelector('aside[aria-label="Tuning"]')?.dataset.open === 'true');
+        await page.waitForTimeout(400);
+        const toggle = sheet.getByRole('button', { name: /Dyslexia-friendly font/ });
+        await toggle.scrollIntoViewIfNeeded();
+        expect(await toggle.isDisabled(), 'the dyslexia toggle is still enabled on a PDF');
+        const reason = sheet.getByText('The dyslexia-friendly font is not available for PDF pages.');
+        await reason.scrollIntoViewIfNeeded();
+        const box = await reason.boundingBox();
+        expect(box !== null, 'the reason is not rendered');
+        expect(box.x >= 0 && box.x + box.width <= 375 && box.y >= 0 && box.y + box.height <= 667 - 56 + 1, `reason box ${JSON.stringify(box)} is off screen or under the dock`);
+        await shot(page, 'mobile-pdf-dyslexic-blocked');
+        await sheet.getByRole('button', { name: 'Close panel' }).tap();
+      });
+      await check('mobile', 'returning to a text document turns both controls back on', async () => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByRole('button', { name: /^Open Sleep/ }).tap();
+        await page.waitForSelector('article');
+        await awake();
+        expect(await page.getByRole('button', { name: 'Bionic reading', exact: true }).isEnabled(), 'Bionic still disabled on a text document');
+        await page.getByRole('button', { name: 'Tuning', exact: true }).tap();
+        await page.waitForTimeout(400);
+        const toggle = page.getByRole('complementary', { name: 'Tuning' }).getByRole('button', { name: /Dyslexia-friendly font/ });
+        await toggle.scrollIntoViewIfNeeded();
+        expect(await toggle.isEnabled(), 'the dyslexia toggle is still disabled on a text document');
+        await shot(page, 'mobile-text-dyslexic-enabled');
+      });
     } finally {
       await context.close();
     }

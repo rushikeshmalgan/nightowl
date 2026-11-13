@@ -52,6 +52,24 @@ describe('buildCommands', () => {
     expect(commands.some((c) => c.id === 'tts')).toBe(false);
   });
 
+  it('leaves out the bionic and dyslexia commands when they are blocked', () => {
+    const commands = buildCommands({ ui, tts: { supported: false, toggle: () => {} }, blocked: { bionic: true, dyslexic: true } });
+    expect(commands.some((c) => c.id === 'bionic')).toBe(false);
+    expect(commands.some((c) => c.id === 'dyslexic')).toBe(false);
+  });
+
+  it('blocks them independently', () => {
+    const onlyBionic = buildCommands({ ui, tts: { supported: false, toggle: () => {} }, blocked: { bionic: true } });
+    expect(onlyBionic.some((c) => c.id === 'bionic')).toBe(false);
+    expect(onlyBionic.some((c) => c.id === 'dyslexic')).toBe(true);
+  });
+
+  it('keeps both commands when nothing is blocked', () => {
+    const commands = buildCommands({ ui, tts: { supported: false, toggle: () => {} } });
+    expect(commands.some((c) => c.id === 'bionic')).toBe(true);
+    expect(commands.some((c) => c.id === 'dyslexic')).toBe(true);
+  });
+
   it('toggles night pages', () => {
     const commands = buildCommands({ ui, tts: { supported: false, toggle: () => {} } });
     commands.find((c) => c.title === 'Toggle night pages')?.run();

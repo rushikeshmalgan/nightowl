@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { useUi } from '../features/shell/ui';
-import { resetFakes, state } from '../test/fakes';
+import { makeBinaryDoc, resetFakes, state } from '../test/fakes';
 import { makeFakeAdapters } from '../test/fakeAdapter';
 import { setMedia } from '../test/media';
 import type { DefaultAdapters } from '../features/music/defaultAdapters';
@@ -255,6 +255,78 @@ describe('App sheet backdrop', () => {
     const library = await screen.findByRole('region', { name: 'Library' });
     fireEvent.click(within(library).getByRole('button', { name: 'Close panel' }));
     expect(useUi.getState().libraryOpen).toBe(false);
+  });
+});
+
+describe('App text styling on PDFs', () => {
+  beforeEach(() => {
+    resetFakes();
+    act(() => useUi.getState().reset());
+  });
+
+  /** The library list is read at mount, so the PDF must be in the fakes before the app renders. */
+  const renderWithPdf = async () => {
+    state.docs.push(makeBinaryDoc('paper.pdf', 'pdf'));
+    await renderApp();
+  };
+  const openFromLibrary = async (name: string | RegExp, title: string) => {
+    if (!useUi.getState().libraryOpen) fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    const library = await screen.findByRole('region', { name: 'Library' });
+    fireEvent.click(within(library).getByRole('button', { name: typeof name === 'string' ? `Open ${name}` : name }));
+    await waitFor(() => expect(screen.getByTestId('status-title')).toHaveTextContent(title));
+  };
+  const openPdf = () => openFromLibrary('paper.pdf', 'paper.pdf');
+  const openText = () => openFromLibrary(/Open Sleep/, 'Sleep');
+
+  it('keeps bionic and the dyslexia font working on a text document', async () => {
+    await renderApp();
+    expect(screen.getByRole('button', { name: 'Bionic reading' })).toBeEnabled();
+    press({ key: 'b', ctrlKey: true });
+    expect(useUi.getState().bionic).toBe(true);
+  });
+
+  it('disables the Bionic rail button on a PDF and says why', async () => {
+    await renderWithPdf();
+    await openPdf();
+    const button = screen.getByRole('button', { name: 'Bionic reading' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'Bionic reading is not available for PDF pages.');
+  });
+
+  it('does not show the Bionic flag on a PDF, and Ctrl+B leaves the setting alone', async () => {
+    await renderWithPdf();
+    press({ key: 'b', ctrlKey: true });
+    expect(screen.getByRole('status', { name: 'Document status' })).toHaveTextContent('Bionic');
+    await openPdf();
+    expect(screen.getByRole('status', { name: 'Document status' })).not.toHaveTextContent('Bionic');
+    press({ key: 'b', ctrlKey: true });
+    expect(useUi.getState().bionic).toBe(true);
+  });
+
+  it('finds bionic still on when the reader returns to a text document', async () => {
+    await renderWithPdf();
+    press({ key: 'b', ctrlKey: true });
+    await openPdf();
+    await openText();
+    expect(useUi.getState().bionic).toBe(true);
+    expect(screen.getByRole('article').querySelector('strong')).not.toBeNull();
+  });
+
+  it('disables the dyslexia font in the tuning panel on a PDF, with the reason visible', async () => {
+    await renderWithPdf();
+    await openPdf();
+    press({ key: '\\' });
+    expect(screen.getByRole('button', { name: /Dyslexia-friendly font/ })).toBeDisabled();
+    expect(screen.getByText('The dyslexia-friendly font is not available for PDF pages.')).toBeInTheDocument();
+  });
+
+  it('removes the bionic and dyslexia commands from the palette on a PDF', async () => {
+    const user = userEvent.setup();
+    await renderWithPdf();
+    await openPdf();
+    press({ key: 'k', ctrlKey: true });
+    await user.type(screen.getByRole('combobox'), 'bionic');
+    expect(screen.queryByText('Toggle bionic reading')).not.toBeInTheDocument();
   });
 });
 

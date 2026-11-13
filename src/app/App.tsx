@@ -17,6 +17,7 @@ import { ReaderCanvas } from '../features/reader/ReaderCanvas';
 import type { ReaderHandle, ReaderPosition } from '../features/reader/ReaderCanvas';
 import { StatusLine } from '../features/shell/StatusLine';
 import { TuningPanel } from '../features/shell/TuningPanel';
+import { textStylingBlocks } from '../features/reader/textStyling';
 import { WarmthOverlay } from '../features/shell/WarmthOverlay';
 import { useAudioEngine } from '../features/audio/useAudioEngine';
 import { useAudioLevel } from '../features/audio/useAudioLevel';
@@ -211,9 +212,17 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
     ui.set('audioOpen', false);
   };
 
+  // A PDF page is a canvas: bionic reading and the dyslexia font cannot act on it. The saved
+  // settings are left alone, so they apply again on the next text document.
+  const stylingBlocks = textStylingBlocks(doc);
+  const bionicBlocked = stylingBlocks.bionic !== null;
+  const dyslexicBlocked = stylingBlocks.dyslexic !== null;
+
   useHotkeys({
     'mod+k': () => ui.toggle('paletteOpen'),
-    'mod+b': () => ui.toggle('bionic'),
+    'mod+b': () => {
+      if (!bionicBlocked) ui.toggle('bionic');
+    },
     '\\': () => {
       tuningOpenedByHover.current = false;
       ui.toggle('tuningOpen');
@@ -235,13 +244,14 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
         audio: { toggle: () => void toggleNoise(), setTrack: (id) => void audio.setTrack(id) },
         sleep: { set: sleep.set },
         music: { select: (source) => void chooseMusic(source), toggle: () => void toggleMusic() },
+        blocked: { bionic: bionicBlocked, dyslexic: dyslexicBlocked },
         openFeedback: () => {
           useUi.getState().set('libraryOpen', false);
           useUi.getState().set('audioOpen', false);
           setFeedbackOpen(true);
         },
       }),
-    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic],
+    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic, bionicBlocked, dyslexicBlocked],
   );
 
   // Typing a page number in the palette offers a jump to that page.
@@ -288,7 +298,9 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       label: 'Bionic reading',
       icon: <Type {...ICON} />,
       hotkey: 'mod+b',
-      pressed: ui.bionic,
+      pressed: ui.bionic && !bionicBlocked,
+      disabled: bionicBlocked,
+      disabledReason: stylingBlocks.bionic ?? undefined,
       onClick: () => ui.toggle('bionic'),
     },
     {
@@ -341,7 +353,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   ];
 
   const flags = [
-    ui.bionic ? 'Bionic' : null,
+    ui.bionic && !bionicBlocked ? 'Bionic' : null,
     ui.focusRuler ? 'Ruler' : null,
     ui.autoScroll ? 'Auto-scroll' : null,
     tts.speaking ? 'Reading aloud' : null,
@@ -462,6 +474,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
           />
         ) : null}
         <TuningPanel
+          dyslexicBlockedReason={stylingBlocks.dyslexic}
           onMouseLeave={() => {
             if (tuningOpenedByHover.current) {
               tuningOpenedByHover.current = false;

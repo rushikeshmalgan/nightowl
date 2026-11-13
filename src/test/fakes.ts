@@ -28,6 +28,13 @@ export function makeTextDoc(name: string, text: string): DocRecord {
   return { id: `doc-${clock}`, name, type: 'text', size: text.length, blob, addedAt: clock, lastOpenedAt: clock };
 }
 
+/** A PDF or PSD record with a stand-in blob: enough for routing, not for rendering. */
+export function makeBinaryDoc(name: string, type: 'pdf' | 'psd'): DocRecord {
+  const blob = { size: 8, arrayBuffer: async () => new ArrayBuffer(8) } as unknown as Blob;
+  clock += 1;
+  return { id: `doc-${clock}`, name, type, size: 8, blob, addedAt: clock, lastOpenedAt: clock - 1000 };
+}
+
 /** Resets to a fresh library holding the two seed documents. */
 export function resetFakes(): void {
   clock = 1000;
