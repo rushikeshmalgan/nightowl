@@ -660,6 +660,15 @@ const groups = {
         await page.getByRole('button', { name: /^Reset zoom/ }).tap();
         await page.waitForTimeout(400);
       });
+      await check('phone', 'the document title is readable in the status line', async () => {
+        await awake();
+        const title = page.getByTestId('status-title');
+        const box = await title.boundingBox();
+        const text = await title.innerText();
+        expect(box !== null && box.width >= 100, `the title is ${box ? Math.round(box.width) : 0}px wide`);
+        expect(text.startsWith('Must-Do'), `the title reads "${text}"`);
+        await shot(page, 'phone-status-line');
+      });
     } finally {
       await context.close();
     }

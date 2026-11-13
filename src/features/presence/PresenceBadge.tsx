@@ -1,10 +1,13 @@
+import { NARROW_QUERY, useMediaQuery } from '../../shared/useMediaQuery';
 import type { Presence } from './usePresence';
 
-/** The live reader count in the status line, or "Local mode" without a connection. */
+/** The live reader count in the status line, or "Local mode" without a connection. On a phone, only the count. */
 export function PresenceBadge({ status, total, byRoom }: Presence) {
+  const narrow = useMediaQuery(NARROW_QUERY);
   let text: string;
   if (status === 'online' && total !== null && byRoom) {
-    text = `${total.toLocaleString('en-US')} online · PDF ${byRoom.pdf} · PSD ${byRoom.psd} · Text ${byRoom.text}`;
+    const count = `${total.toLocaleString('en-US')} online`;
+    text = narrow ? count : `${count} · PDF ${byRoom.pdf} · PSD ${byRoom.psd} · Text ${byRoom.text}`;
   } else if (status === 'connecting') {
     text = 'Connecting…';
   } else {
