@@ -19,6 +19,8 @@ import { ReflowView, reflowPageAt, scrollToReflowPage } from './ReflowView';
 import { useReflowText } from './useReflowText';
 import type { ReflowState } from './useReflowText';
 import type { PdfMode } from '../../shared/types';
+import { REFLOW_EMPTY_REASON, REFLOW_READ_ERROR } from './reflowMessages';
+import { X } from 'lucide-react';
 
 const RULER_STEP = 24;
 const STORAGE_READ_ERROR = 'This document could not be read from storage.';
@@ -131,6 +133,7 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   const resume = useRef<{ page: number; scrollTop: number } | null>(null);
   const enteredBySwitch = useRef(false);
   const placedReflow = useRef<string | null>(null);
+  const [reflowNotice, setReflowNotice] = useState<{ docId: string; text: string } | null>(null);
 
   useEffect(() => {
     if (!docId || progress.initial === undefined || modeState.docId === docId) return;
@@ -159,6 +162,7 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
     if (!docId || !reflowOn || (reflow.status !== 'empty' && reflow.status !== 'error')) return;
     setModeState({ docId, mode: 'pages' });
     progress.update({ pdfMode: 'pages' });
+    setReflowNotice({ docId, text: reflow.status === 'empty' ? REFLOW_EMPTY_REASON : REFLOW_READ_ERROR });
   }, [docId, reflowOn, reflow.status]);
 
   useEffect(() => {
@@ -350,6 +354,19 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
           <div className="px-6 pb-28 pt-12 md:px-12">{body}</div>
         </div>
       )}
+      {reflowNotice && reflowNotice.docId === docId ? (
+        <div role="alert" className="absolute left-16 right-4 top-10 z-10 flex items-start gap-2 rounded border border-line bg-surface px-3 py-2 text-xs text-muted">
+          <span className="flex-1">{reflowNotice.text}</span>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setReflowNotice(null)}
+            className="motion-color flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted outline-none hover:text-ink focus-visible:ring-1 focus-visible:ring-accent"
+          >
+            <X size={12} strokeWidth={1.75} />
+          </button>
+        </div>
+      ) : null}
       {focusRuler ? <FocusRuler y={rulerY} /> : null}
     </main>
   );

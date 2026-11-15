@@ -348,6 +348,31 @@ describe('ReaderCanvas PDF reflow', () => {
     expect(onPdfView).toHaveBeenLastCalledWith({ mode: 'pages', reflow: 'empty' });
   });
 
+  it('tells the reader on screen why a scanned PDF cannot be reflowed, and lets them dismiss it', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'empty' };
+    render(<ReaderCanvas doc={pdf()} />);
+    const notice = await screen.findByRole('alert');
+    expect(notice).toHaveTextContent('This PDF has no selectable text (it looks scanned), so it cannot be reflowed.');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('explains a failed text extraction the same way', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'error', message: "This PDF's text could not be read." };
+    render(<ReaderCanvas doc={pdf()} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent("This PDF's text could not be read.");
+  });
+
+  it('shows no notice when Reflow works', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'ready', doc: readyDoc };
+    render(<ReaderCanvas doc={pdf()} />);
+    await screen.findByText('Night reading is calm.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('does not offer a view switch for text documents', async () => {
     const onPdfView = vi.fn();
     render(<ReaderCanvas doc={textDoc('t', 't.txt', 'hello')} onPdfView={onPdfView} />);
