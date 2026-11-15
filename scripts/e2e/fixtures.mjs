@@ -6,7 +6,7 @@ import { initializeCanvas, writePsd } from 'ag-psd';
  * With `locked`, the trailer declares standard encryption whose password
  * entries match nothing, so a viewer must ask for a password.
  */
-export function makePdf(pageCount, { locked = false } = {}) {
+export function makePdf(pageCount, { locked = false, streams = null } = {}) {
   const objects = [];
   const add = (body) => {
     objects.push(body);
@@ -19,7 +19,8 @@ export function makePdf(pageCount, { locked = false } = {}) {
 
   const kids = [];
   for (let i = 1; i <= pageCount; i++) {
-    const stream = `BT /F1 28 Tf 72 700 Td (Page ${i} of ${pageCount}) Tj ET\nBT /F1 14 Tf 72 660 Td (NightOwl end-to-end fixture) Tj ET`;
+    const stream =
+      streams?.[i - 1] ?? `BT /F1 28 Tf 72 700 Td (Page ${i} of ${pageCount}) Tj ET\nBT /F1 14 Tf 72 660 Td (NightOwl end-to-end fixture) Tj ET`;
     const content = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
     kids.push(
       add(
@@ -49,6 +50,44 @@ export function makePdf(pageCount, { locked = false } = {}) {
     locked ? ` /Encrypt ${encrypt} 0 R /ID [${id} ${id}]` : ''
   } >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(out, 'latin1');
+}
+
+/** One text run: `size`pt Helvetica at (x, y). Parentheses must not appear in `text`. */
+const run = (text, y, size = 11, x = 72) => `BT /F1 ${size} Tf ${x} ${y} Td (${text}) Tj ET`;
+
+/**
+ * An article-like PDF: a repeated header and a "Page N of M" footer, two
+ * paragraphs per page that wrap over several lines, and a word hyphenated
+ * across a line break. Reflow should drop the header and footer and join the word.
+ */
+export function makeArticlePdf(pageCount = 3) {
+  const streams = [];
+  for (let p = 1; p <= pageCount; p++) {
+    const first = [
+      'Revenue grew steadily across every region this year, driven mostly by',
+      'demand for night reading tools and a growing community of readers who',
+      'prefer calm, warm screens. Pattern recog-',
+      'nition in the survey data was clear.',
+    ];
+    const second = [
+      `Section ${p} outlook: costs fell while attention stayed high, and the team`,
+      'expects the same quiet trend to continue through the next quarter.',
+    ];
+    const lines = [
+      run('Annual Report 2026', 760, 9),
+      ...first.map((line, i) => run(line, 700 - i * 14)),
+      ...second.map((line, i) => run(line, 700 - first.length * 14 - 18 - i * 14)),
+      run(`Page ${p} of ${pageCount}`, 40, 9),
+    ];
+    streams.push(lines.join('\n'));
+  }
+  return makePdf(pageCount, { streams });
+}
+
+/** A PDF whose pages are only a filled rectangle: no text at all, like a scan. */
+export function makeScannedPdf(pageCount = 2) {
+  const streams = Array.from({ length: pageCount }, () => '0.85 g 72 72 468 648 re f');
+  return makePdf(pageCount, { streams });
 }
 
 /**

@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { createServer, loadEnv, preview } from 'vite';
-import { makePdf, makePsd, makeToneWav } from './fixtures.mjs';
+import { makeArticlePdf, makePdf, makePsd, makeScannedPdf, makeToneWav } from './fixtures.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = 5199;
@@ -746,6 +746,99 @@ const groups = {
         expect(box.x >= 47.5 && box.x + box.width <= 360.5, `the panel spans ${Math.round(box.x)}-${Math.round(box.x + box.width)}`);
         await shot(page, 'phone-feedback');
         await panel.getByRole('button', { name: 'Close feedback' }).tap();
+      });
+      // Reflow: an article-like PDF (header, footer, hyphenated words) and a scan with no text.
+      const importPdf = async (name, buffer) => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles({ name, mimeType: 'application/pdf', buffer });
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        // The previous PDF's pages are still on screen until the new document opens.
+        await page.waitForFunction((n) => document.querySelector('[data-testid="status-title"]')?.textContent === n, name, { timeout: 15000 });
+        const close = library.getByRole('button', { name: 'Close panel' });
+        if (await close.isVisible().catch(() => false)) await close.tap();
+        await page.waitForTimeout(500);
+        await awake();
+      };
+      const openFromLibrary = async (name) => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        await page.getByRole('region', { name: 'Library', exact: true }).getByRole('button', { name: `Open ${name}` }).tap();
+        await page.waitForTimeout(700);
+        await awake();
+      };
+      await check('phone', 'Reflow shows the PDF as readable text that fits the phone', async () => {
+        await importPdf('Annual Report.pdf', makeArticlePdf(3));
+        await page.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        await page.waitForSelector('[data-testid="reader-scroll"] article', { timeout: 15000 });
+        const m = await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="reader-scroll"]');
+          return {
+            scrollW: scroller.scrollWidth,
+            clientW: scroller.clientWidth,
+            font: getComputedStyle(scroller.querySelector('article')).fontSize,
+            text: scroller.innerText,
+          };
+        });
+        expect(m.scrollW <= m.clientW + 1, `reflow scrolls sideways (${m.scrollW} wide in ${m.clientW})`);
+        expect(m.font === '18px', `the text is ${m.font}, not 18px`);
+        expect(m.text.includes('Pattern recognition in the survey data was clear.'), 'the hyphenated word was not joined');
+        expect(!m.text.includes('Annual Report 2026'), 'the repeated page header is still in the text');
+        expect(!/Page \d of \d/.test(m.text), 'the repeated page footer is still in the text');
+        await shot(page, 'phone-reflow');
+      });
+      await check('phone', 'Bionic reading applies in Reflow', async () => {
+        await awake();
+        const bionic = page.getByRole('button', { name: 'Bionic reading', exact: true });
+        expect(await bionic.isEnabled(), 'Bionic is still disabled in Reflow');
+        await bionic.tap();
+        await page.waitForTimeout(300);
+        const strong = await page.locator('[data-testid="reader-scroll"] article strong').count();
+        expect(strong > 0, 'no bold word starts appeared');
+        await shot(page, 'phone-reflow-bionic');
+        await bionic.tap();
+      });
+      await check('phone', 'switching Reflow back to Pages keeps the page', async () => {
+        await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="reader-scroll"]');
+          const section = document.querySelector('section[data-page="3"]');
+          scroller.scrollTop += section.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 40;
+        });
+        await page.waitForTimeout(600);
+        await awake();
+        const before = await page.getByRole('status', { name: 'Document status' }).innerText();
+        expect(/3 \/ 3/.test(before), `the status line says "${before.replace(/\s+/g, ' ')}" in Reflow`);
+        await page.getByRole('button', { name: 'Switch to Pages' }).tap();
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await page.waitForTimeout(900);
+        // The last page is short, so the document ends before it can reach the top edge: it only has to be on screen.
+        const box = await page.evaluate(() => {
+          const r = document.querySelector('[data-testid="pdf-page"][data-page="3"]').getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, view: innerHeight };
+        });
+        expect(box.top < box.view - 150 && box.bottom > 150, `page 3 spans ${Math.round(box.top)}-${Math.round(box.bottom)}px in a ${box.view}px screen after switching back`);
+      });
+      await check('phone', 'a scanned PDF says it cannot be reflowed and stays on Pages', async () => {
+        await importPdf('Scan.pdf', makeScannedPdf(2));
+        await page.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        const notice = page.getByRole('alert');
+        await notice.waitFor({ timeout: 15000 });
+        const text = await notice.innerText();
+        expect(/scanned/.test(text), `the notice says "${text}"`);
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await awake();
+        expect(await page.getByRole('button', { name: 'Switch to Reflow' }).isDisabled(), 'the Reflow switch is still enabled');
+        await shot(page, 'phone-reflow-scanned');
+      });
+      await check('phone', 'each PDF remembers whether it was read in Reflow', async () => {
+        await openFromLibrary('Annual Report.pdf');
+        await page.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        await page.waitForSelector('[data-testid="reader-scroll"] article', { timeout: 15000 });
+        await page.waitForTimeout(900);
+        await openFromLibrary('Scan.pdf');
+        await openFromLibrary('Annual Report.pdf');
+        await page.waitForSelector('[data-testid="reader-scroll"] article', { timeout: 15000 });
       });
     } finally {
       await context.close();

@@ -64,6 +64,20 @@ describe('reflow scroll helpers', () => {
     expect(reflowPageAt(layout([200, 900, 1600]))).toBe(1);
   });
 
+  it('reports the last page once scrolled to the end, even if its divider cannot reach the top', () => {
+    const scroller = layout([-1200, -600, 300], 900);
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 700 });
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1600 });
+    expect(reflowPageAt(scroller)).toBe(3);
+  });
+
+  it('does not jump to the last page before the end', () => {
+    const scroller = layout([-1200, -600, 300], 500);
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 700 });
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1600 });
+    expect(reflowPageAt(scroller)).toBe(2);
+  });
+
   it('scrolls a page to just below the status line', () => {
     const scroller = layout([-300, 400, 900], 100);
     scrollToReflowPage(scroller, 3);

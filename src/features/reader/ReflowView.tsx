@@ -45,10 +45,16 @@ function sectionTops(scroller: HTMLElement): Array<{ page: number; top: number }
   }));
 }
 
-/** The page whose section is under the top edge of the scroll container. */
+/**
+ * The page whose section is under the top edge of the scroll container. At the very end it is the last
+ * page, since a short last page cannot always be scrolled up until its divider reaches the top.
+ */
 export function reflowPageAt(scroller: HTMLElement): number {
+  const tops = sectionTops(scroller);
+  const atEnd = scroller.clientHeight > 0 && scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+  if (atEnd && tops.length > 0) return tops[tops.length - 1].page;
   let current = 1;
-  for (const { page, top } of sectionTops(scroller)) {
+  for (const { page, top } of tops) {
     if (top <= REFLOW_TOP_MARGIN) current = page;
     else break;
   }
