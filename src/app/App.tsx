@@ -218,7 +218,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   // settings are left alone, so they apply again on the next text document.
   const reflowAvailable = pdfView !== null && pdfView.reflow !== 'empty' && pdfView.reflow !== 'error';
   const pdfMode = pdfView?.mode ?? null;
-  const stylingBlocks = textStylingBlocks(doc);
+  const stylingBlocks = textStylingBlocks(doc, pdfMode ? { mode: pdfMode, reflowAvailable } : null);
   const bionicBlocked = stylingBlocks.bionic !== null;
   const dyslexicBlocked = stylingBlocks.dyslexic !== null;
 

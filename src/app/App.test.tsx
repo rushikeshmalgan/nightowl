@@ -294,7 +294,7 @@ describe('App text styling on PDFs', () => {
     await openPdf();
     const button = screen.getByRole('button', { name: 'Bionic reading' });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'Bionic reading is not available for PDF pages.');
+    expect(button).toHaveAttribute('title', 'Bionic reading works in Reflow mode. Switch this PDF to Reflow to use it.');
   });
 
   it('does not show the Bionic flag on a PDF, and Ctrl+B leaves the setting alone', async () => {
@@ -321,7 +321,7 @@ describe('App text styling on PDFs', () => {
     await openPdf();
     press({ key: '\\' });
     expect(screen.getByRole('button', { name: /Dyslexia-friendly font/ })).toBeDisabled();
-    expect(screen.getByText('The dyslexia-friendly font is not available for PDF pages.')).toBeInTheDocument();
+    expect(screen.getByText('The dyslexia-friendly font works in Reflow mode. Switch this PDF to Reflow to use it.')).toBeInTheDocument();
   });
 
   it('removes the bionic and dyslexia commands from the palette on a PDF', async () => {

@@ -564,7 +564,7 @@ const groups = {
         const bionic = page.getByRole('button', { name: 'Bionic reading', exact: true });
         expect(await bionic.isDisabled(), 'the Bionic button is still enabled on a PDF');
         const title = await bionic.getAttribute('title');
-        expect(title === 'Bionic reading is not available for PDF pages.', `title was ${title}`);
+        expect(title === 'Bionic reading works in Reflow mode. Switch this PDF to Reflow to use it.', `title was ${title}`);
         await page.keyboard.press('Control+b');
         await page.waitForTimeout(150);
         const flagged = (await page.getByTestId('status-title').locator('xpath=..').innerText()).includes('Bionic');
@@ -579,7 +579,7 @@ const groups = {
         const toggle = sheet.getByRole('button', { name: /Dyslexia-friendly font/ });
         await toggle.scrollIntoViewIfNeeded();
         expect(await toggle.isDisabled(), 'the dyslexia toggle is still enabled on a PDF');
-        const reason = sheet.getByText('The dyslexia-friendly font is not available for PDF pages.');
+        const reason = sheet.getByText('The dyslexia-friendly font works in Reflow mode. Switch this PDF to Reflow to use it.');
         await reason.scrollIntoViewIfNeeded();
         const box = await reason.boundingBox();
         expect(box !== null, 'the reason is not rendered');
