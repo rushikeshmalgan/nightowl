@@ -88,8 +88,8 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
         className="motion-color flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted outline-none hover:text-ink focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40"
       >
         <span className="min-w-0 flex-1 truncate text-ink">{item.title}</span>
-        <span className="shrink-0 truncate text-[10px]">{item.artist}</span>
-        {item.language ? <span className="shrink-0 font-mono text-[10px] text-accent">{item.language}</span> : null}
+        <span className="shrink-0 truncate text-xs">{item.artist}</span>
+        {item.language ? <span className="shrink-0 font-mono text-xs text-accent">{item.language}</span> : null}
       </button>
     </li>
   );
@@ -127,11 +127,11 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
               </div>
             ) : (
               <>
-                {current ? <p className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted">{current.tags.join(' · ')}</p> : null}
+                {current ? <p className="px-2 py-1 text-xs text-muted">{current.tags.join(', ')}</p> : null}
                 <ul>{current?.items.map((item) => itemButton(item, !online && item.source !== 'noise'))}</ul>
                 {customPlaylists.length > 0 ? (
                   <>
-                    <p className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted">Your links</p>
+                    <p className="px-2 py-1 text-xs text-muted">Your links</p>
                     <ul>{customPlaylists.map((item) => itemButton(item, !online))}</ul>
                   </>
                 ) : null}
@@ -188,13 +188,13 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
         )}
         <div className={narrow ? 'flex min-w-0 flex-1 flex-col' : 'flex w-40 min-w-0 shrink-0 flex-col'}>
           <span className="truncate text-xs text-ink">{state.title || 'Nothing playing'}</span>
-          <span className="flex items-center gap-1 truncate text-[10px] text-muted">
+          <span className="flex items-center gap-1 truncate text-xs text-muted">
             <span className="truncate">{state.artist}</span>
             {state.language ? <span className="font-mono text-accent">{state.language}</span> : null}
           </span>
         </div>
         {narrow && music.sleepRemainingMs !== null ? (
-          <span title="Sleep timer" className="shrink-0 font-mono text-[10px] tabular-nums text-muted">
+          <span title="Sleep timer" className="shrink-0 font-mono text-xs tabular-nums text-muted">
             {formatCountdown(music.sleepRemainingMs)}
           </span>
         ) : null}
@@ -246,9 +246,9 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
         </div>
 
         {narrow ? null : (
-          <label className="flex shrink-0 items-center gap-1 text-[10px] text-muted">
+          <label className="flex shrink-0 items-center gap-1 text-xs text-muted">
             <span className="sr-only">Sleep timer</span>
-            <SleepSelect music={music} className="px-1 py-1 text-[10px]" />
+            <SleepSelect music={music} className="px-1 py-1 text-xs" />
             {music.sleepRemainingMs !== null ? <span className="font-mono tabular-nums">{formatCountdown(music.sleepRemainingMs)}</span> : null}
           </label>
         )}
@@ -264,7 +264,7 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
                 disabled={disabled}
                 title={disabled ? 'Needs a connection' : undefined}
                 onClick={() => void music.select(source.id)}
-                className={`motion-color rounded border border-line px-2 py-1 text-[10px] outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 ${
+                className={`motion-color rounded border border-line px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 ${
                   music.activeSource === source.id ? 'bg-active text-ink' : 'text-muted hover:text-ink'
                 }`}
               >
@@ -279,7 +279,7 @@ export function MusicDock({ music, categories, tracks, customPlaylists, online, 
         </button>
 
         {error ? (
-          <p role="alert" className="max-w-48 shrink truncate text-[10px] text-red-400" title={error}>
+          <p role="alert" className="max-w-48 shrink truncate text-xs text-red-400" title={error}>
             {error}
           </p>
         ) : null}

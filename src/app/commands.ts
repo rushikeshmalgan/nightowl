@@ -24,7 +24,8 @@ export interface CommandDeps {
 }
 
 const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
-  { id: 'night', label: 'Night' },
+  { id: 'night', label: 'Lamp (dark)' },
+  { id: 'paper', label: 'Paper (light)' },
   { id: 'sepia', label: 'Sepia' },
   { id: 'oled', label: 'OLED' },
   { id: 'crimson', label: 'Crimson' },

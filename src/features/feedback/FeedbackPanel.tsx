@@ -46,7 +46,7 @@ export function FeedbackPanel({ accessKey, online, onClose, send = sendFeedback 
   return (
     <section aria-label="Feedback" className="absolute bottom-14 left-12 top-8 flex w-80 max-w-[calc(100%-3rem)] flex-col gap-3 overflow-y-auto border-r border-line bg-surface p-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted">Report a problem or suggest something</h2>
+        <h2 className="font-serif text-lg text-ink">Report a problem or suggest something</h2>
         <button
           type="button"
           aria-label="Close feedback"

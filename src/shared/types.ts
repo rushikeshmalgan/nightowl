@@ -1,5 +1,5 @@
 export type DocType = 'pdf' | 'psd' | 'text';
-export type ThemeId = 'night' | 'sepia' | 'oled' | 'crimson';
+export type ThemeId = 'night' | 'paper' | 'sepia' | 'oled' | 'crimson';
 export type LanguageTag = 'EN' | 'HI' | 'INST' | 'NATURE';
 
 export interface DocRecord {

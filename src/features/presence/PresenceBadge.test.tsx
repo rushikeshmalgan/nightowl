@@ -3,21 +3,21 @@ import { setMedia } from '../../test/media';
 import { PresenceBadge } from './PresenceBadge';
 
 describe('PresenceBadge', () => {
-  it('shows only the count on a phone, leaving room for the title', () => {
+  it('shows only the count on a phone', () => {
     setMedia({ narrow: true });
     render(<PresenceBadge status="online" total={23} byRoom={{ pdf: 12, psd: 3, text: 8 }} />);
-    expect(screen.getByTestId('presence')).toHaveTextContent('23 online');
-    expect(screen.getByTestId('presence')).not.toHaveTextContent('PDF');
+    expect(screen.getByTestId('presence')).toHaveTextContent(/^23$/);
   });
 
-  it('shows the live count and breakdown', () => {
+  it('shows the live count, with the breakdown in the tooltip', () => {
     render(<PresenceBadge status="online" total={23} byRoom={{ pdf: 12, psd: 3, text: 8 }} />);
-    expect(screen.getByTestId('presence')).toHaveTextContent('23 online · PDF 12 · PSD 3 · Text 8');
+    expect(screen.getByTestId('presence')).toHaveTextContent('23 reading now');
+    expect(screen.getByTestId('presence')).toHaveAttribute('title', '12 reading PDFs, 3 reading PSDs, 8 reading text');
   });
 
   it('formats large counts', () => {
     render(<PresenceBadge status="online" total={1428} byRoom={{ pdf: 1000, psd: 28, text: 400 }} />);
-    expect(screen.getByTestId('presence')).toHaveTextContent('1,428 online');
+    expect(screen.getByTestId('presence')).toHaveTextContent('1,428 reading now');
   });
 
   it('says local mode when not connected', () => {

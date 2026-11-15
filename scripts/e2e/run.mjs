@@ -365,14 +365,14 @@ const groups = {
     });
     await check('presence', 'a second tab adds one reader in both tabs', async () => {
       // Other readers (for example the owner's own open tab) may already be counted.
-      const count = (text) => Number(/^([\d,]+) online/.exec(text.trim())?.[1].replace(/,/g, '') ?? NaN);
+      const count = (text) => Number(/^([\d,]+) reading now/.exec(text.trim())?.[1].replace(/,/g, '') ?? NaN);
       const before = count(await badge(page).innerText());
       const second = await page.context().newPage();
       await second.goto(page.url());
       const raised = (p) =>
         p.waitForFunction(
           (expected) => {
-            const match = /^([\d,]+) online/.exec(document.querySelector('[data-testid="presence"]')?.textContent?.trim() ?? '');
+            const match = /^([\d,]+) reading now/.exec(document.querySelector('[data-testid="presence"]')?.textContent?.trim() ?? '');
             return match !== null && Number(match[1].replace(/,/g, '')) === expected;
           },
           before + 1,
@@ -396,7 +396,7 @@ const groups = {
       expect(theme === 'sepia', `theme was ${theme}`);
       await page.getByRole('dialog').waitFor({ state: 'hidden' });
       await page.keyboard.press('Control+k');
-      await page.getByRole('combobox').fill('theme: night');
+      await page.getByRole('combobox').fill('theme: lamp');
       await page.keyboard.press('Enter');
       await page.getByRole('dialog').waitFor({ state: 'hidden' });
     });
