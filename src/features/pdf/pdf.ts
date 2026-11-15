@@ -1,5 +1,6 @@
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import type { RenderTask } from 'pdfjs-dist';
+import type { PdfTextItem } from './reflowText';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // The worker ships with the app, so PDFs open with no network.
@@ -16,6 +17,8 @@ export interface PdfHandle {
   renderPage(n: number, canvas: HTMLCanvasElement, scale: number): Promise<void>;
   /** Fills `container` with selectable, invisible text positioned over the page. */
   renderTextLayer(n: number, container: HTMLElement, scale: number): Promise<void>;
+  /** The page's text runs with their positions, for Reflow mode. */
+  getPageText(n: number): Promise<PdfTextItem[]>;
   destroy(): void;
 }
 
@@ -73,6 +76,16 @@ export async function openPdf(data: ArrayBuffer): Promise<PdfHandle> {
       container.style.setProperty('--scale-factor', String(scale));
       const layer = new TextLayer({ textContentSource: page.streamTextContent(), container, viewport });
       await layer.render();
+    },
+
+    async getPageText(n) {
+      const page = await doc.getPage(n);
+      const content = await page.getTextContent();
+      return content.items.flatMap((entry) => {
+        if (!('str' in entry)) return [];
+        const [, , c, d, x, y] = entry.transform as number[];
+        return [{ str: entry.str, x, y, width: entry.width, height: entry.height || Math.hypot(c, d), hasEOL: entry.hasEOL }];
+      });
     },
 
     destroy() {
