@@ -70,6 +70,25 @@ describe('buildCommands', () => {
     expect(commands.some((c) => c.id === 'dyslexic')).toBe(true);
   });
 
+  it('offers Reflow from Pages and Pages from Reflow, but only for a PDF', () => {
+    const set = vi.fn();
+    const base = { ui, tts: { supported: false, toggle: () => {} } };
+    const fromPages = buildCommands({ ...base, pdfView: { mode: 'pages', reflowAvailable: true, set } });
+    expect(fromPages.some((c) => c.id === 'pdf-pages')).toBe(false);
+    fromPages.find((c) => c.id === 'pdf-reflow')?.run();
+    expect(set).toHaveBeenCalledWith('reflow');
+    const fromReflow = buildCommands({ ...base, pdfView: { mode: 'reflow', reflowAvailable: true, set } });
+    expect(fromReflow.some((c) => c.id === 'pdf-reflow')).toBe(false);
+    fromReflow.find((c) => c.id === 'pdf-pages')?.run();
+    expect(set).toHaveBeenCalledWith('pages');
+    expect(buildCommands(base).some((c) => c.id === 'pdf-reflow' || c.id === 'pdf-pages')).toBe(false);
+  });
+
+  it('does not offer Reflow when the PDF has no text', () => {
+    const commands = buildCommands({ ui, tts: { supported: false, toggle: () => {} }, pdfView: { mode: 'pages', reflowAvailable: false, set: () => {} } });
+    expect(commands.some((c) => c.id === 'pdf-reflow')).toBe(false);
+  });
+
   it('toggles night pages', () => {
     const commands = buildCommands({ ui, tts: { supported: false, toggle: () => {} } });
     commands.find((c) => c.title === 'Toggle night pages')?.run();

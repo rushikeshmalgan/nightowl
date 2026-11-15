@@ -20,10 +20,16 @@ export interface ThumbnailRecord {
   blob: Blob;
 }
 
+export type PdfMode = 'pages' | 'reflow';
+
 export interface ProgressRecord {
   docId: string;
   page: number;
   scrollTop: number;
+  /** Which view a PDF was last read in; absent means Pages. */
+  pdfMode?: PdfMode;
+  /** Where the reader was in a PDF's Reflow view. */
+  reflowScrollTop?: number;
 }
 
 export interface BookmarkRecord {

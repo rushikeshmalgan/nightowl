@@ -1,5 +1,5 @@
 import type { UiState } from '../features/shell/ui';
-import type { ThemeId } from '../shared/types';
+import type { PdfMode, ThemeId } from '../shared/types';
 import { AUDIO_TRACKS } from '../features/audio/tracks';
 import type { TrackId } from '../features/audio/tracks';
 
@@ -21,6 +21,8 @@ export interface CommandDeps {
   music?: { select(source: 'noise' | 'spotify' | 'youtube' | 'tracks'): void; toggle(): void };
   /** Text-styling commands that cannot act on the open document are left out of the palette. */
   blocked?: { bionic?: boolean; dyslexic?: boolean };
+  /** Set while a PDF is open: the current view and how to change it. */
+  pdfView?: { mode: PdfMode; reflowAvailable: boolean; set(mode: PdfMode): void };
 }
 
 const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
@@ -32,7 +34,7 @@ const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
 ];
 
 /** The static command list for the palette. Later features append their own. */
-export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music, openFeedback, blocked }: CommandDeps): Command[] {
+export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music, openFeedback, blocked, pdfView }: CommandDeps): Command[] {
   const commands: Command[] = [
     ...(openDocument
       ? documents.map<Command>((doc) => ({
@@ -62,6 +64,14 @@ export function buildCommands({ ui, tts, documents = [], openDocument, requestCl
     { id: 'tuning', title: 'Open tuning panel', group: 'View', hotkey: '\\', keywords: ['settings', 'warmth', 'brightness'], run: () => ui.set('tuningOpen', true) },
     { id: 'reset', title: 'Reset reading settings', group: 'View', run: () => ui.reset() },
   ];
+  if (pdfView) {
+    if (pdfView.mode === 'pages' && pdfView.reflowAvailable) {
+      commands.push({ id: 'pdf-reflow', title: 'Switch to Reflow', group: 'View', keywords: ['pdf', 'text', 'readable', 'phone'], run: () => pdfView.set('reflow') });
+    }
+    if (pdfView.mode === 'reflow') {
+      commands.push({ id: 'pdf-pages', title: 'Switch to Pages', group: 'View', keywords: ['pdf', 'layout', 'original'], run: () => pdfView.set('pages') });
+    }
+  }
   if (tts.supported) {
     commands.push({ id: 'tts', title: 'Read aloud', group: 'Audio', hotkey: 's', keywords: ['speech', 'voice', 'narrate'], run: () => tts.toggle() });
   }
