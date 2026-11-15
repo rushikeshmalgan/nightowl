@@ -14,7 +14,8 @@ import { SpotifyPlayer } from '../features/music/sources/SpotifyPlayer';
 import { YouTubeAudioPlayer } from '../features/music/sources/YouTubeAudioPlayer';
 import type { RailItem } from '../features/shell/Rail';
 import { ReaderCanvas } from '../features/reader/ReaderCanvas';
-import type { ReaderHandle, ReaderPosition } from '../features/reader/ReaderCanvas';
+import type { PdfView, ReaderHandle, ReaderPosition } from '../features/reader/ReaderCanvas';
+import { PdfModeSwitch } from '../features/reader/PdfModeSwitch';
 import { StatusLine } from '../features/shell/StatusLine';
 import { TuningPanel } from '../features/shell/TuningPanel';
 import { textStylingBlocks } from '../features/reader/textStyling';
@@ -60,6 +61,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   const [doc, setDoc] = useState<DocRecord | null>(null);
   const [docText, setDocText] = useState('');
   const [position, setPosition] = useState<ReaderPosition | null>(null);
+  const [pdfView, setPdfView] = useState<PdfView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -214,6 +216,8 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
 
   // A PDF page is a canvas: bionic reading and the dyslexia font cannot act on it. The saved
   // settings are left alone, so they apply again on the next text document.
+  const reflowAvailable = pdfView !== null && pdfView.reflow !== 'empty' && pdfView.reflow !== 'error';
+  const pdfMode = pdfView?.mode ?? null;
   const stylingBlocks = textStylingBlocks(doc);
   const bionicBlocked = stylingBlocks.bionic !== null;
   const dyslexicBlocked = stylingBlocks.dyslexic !== null;
@@ -245,13 +249,14 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
         sleep: { set: sleep.set },
         music: { select: (source) => void chooseMusic(source), toggle: () => void toggleMusic() },
         blocked: { bionic: bionicBlocked, dyslexic: dyslexicBlocked },
+        pdfView: pdfMode ? { mode: pdfMode, reflowAvailable, set: (mode) => readerRef.current?.setPdfMode(mode) } : undefined,
         openFeedback: () => {
           useUi.getState().set('libraryOpen', false);
           useUi.getState().set('audioOpen', false);
           setFeedbackOpen(true);
         },
       }),
-    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic, bionicBlocked, dyslexicBlocked],
+    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic, bionicBlocked, dyslexicBlocked, pdfMode, reflowAvailable],
   );
 
   // Typing a page number in the palette offers a jump to that page.
@@ -371,6 +376,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
         onHighlight={(range) => void highlights.add(range)}
         onText={setDocText}
         onPosition={setPosition}
+        onPdfView={setPdfView}
         onOpenLibrary={() => ui.set('libraryOpen', true)}
       />
 
@@ -384,6 +390,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
               {position.page} / {position.numPages}
             </span>
           ) : null}
+          {doc && pdfView ? <PdfModeSwitch mode={pdfView.mode} reflow={pdfView.reflow} onChange={(mode) => readerRef.current?.setPdfMode(mode)} /> : null}
           {doc ? (
             <button
               type="button"

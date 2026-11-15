@@ -41,6 +41,13 @@ describe('PdfModeSwitch', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('is disabled with the reason when the text could not be read', () => {
+    setup({ reflow: 'error' });
+    const button = screen.getByRole('button', { name: 'Switch to Reflow' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', "This PDF's text could not be read.");
+  });
+
   it('says it is preparing the text while Reflow loads', () => {
     setup({ mode: 'reflow', reflow: 'loading' });
     expect(screen.getByRole('button', { name: 'Switch to Pages' })).toHaveAttribute('aria-busy', 'true');

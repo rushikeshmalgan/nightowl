@@ -49,6 +49,14 @@ describe('useReflowText', () => {
     expect(extractReflow).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a finished result visible after Reflow is switched off, so Pages can show the state', async () => {
+    extractReflow.mockResolvedValue(scanned);
+    const { result, rerender } = renderHook(({ on }) => useReflowText('doc-1', data, on), { initialProps: { on: true } });
+    await waitFor(() => expect(result.current).toEqual({ status: 'empty' }));
+    rerender({ on: false });
+    expect(result.current).toEqual({ status: 'empty' });
+  });
+
   it('says a scanned PDF has no text', async () => {
     extractReflow.mockResolvedValue(scanned);
     const { result } = renderHook(() => useReflowText('doc-1', data, true));

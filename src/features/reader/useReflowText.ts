@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { extractReflow } from '../pdf/reflowExtract';
 import type { ReflowDoc } from '../pdf/reflowText';
 
-export const REFLOW_READ_ERROR = "This PDF's text could not be read.";
+import { REFLOW_READ_ERROR } from './reflowMessages';
+
+export { REFLOW_READ_ERROR };
 
 export type ReflowState =
   | { status: 'idle' }
@@ -14,7 +16,7 @@ export type ReflowState =
 const IDLE: ReflowState = { status: 'idle' };
 const STARTING: ReflowState = { status: 'loading', done: 0, total: 0 };
 
-/** Finished extractions by document id, so switching back to Reflow is instant. */
+/** Finished extractions (text, scanned or failed) by document id, so switching back to Reflow is instant. */
 const settled = new Map<string, ReflowState>();
 
 export function clearReflowCache(): void {
@@ -43,11 +45,20 @@ export function useReflowText(docId: string | null, data: ArrayBuffer | null, en
         settled.set(docId, state);
         report(state);
       },
-      () => report({ status: 'error', message: REFLOW_READ_ERROR }),
+      () => {
+        if (controller.signal.aborted) return;
+        const state: ReflowState = { status: 'error', message: REFLOW_READ_ERROR };
+        settled.set(docId, state);
+        report(state);
+      },
     );
     return () => controller.abort();
   }, [active, docId, data]);
 
-  if (!active || !docId) return IDLE;
-  return settled.get(docId) ?? (progress?.docId === docId ? progress.state : STARTING);
+  if (!docId) return IDLE;
+  // A finished result stays visible while Pages is showing, so the app can say whether Reflow is possible.
+  const done = settled.get(docId);
+  if (done) return done;
+  if (!active) return IDLE;
+  return progress?.docId === docId ? progress.state : STARTING;
 }

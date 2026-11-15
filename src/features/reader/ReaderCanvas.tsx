@@ -15,6 +15,10 @@ import { PdfViewer } from '../pdf/PdfViewer';
 import type { PdfProgress, PdfViewerHandle } from '../pdf/PdfViewer';
 import { PsdInspector } from '../psd/PsdInspector';
 import { TextView } from './TextView';
+import { ReflowView, reflowPageAt, scrollToReflowPage } from './ReflowView';
+import { useReflowText } from './useReflowText';
+import type { ReflowState } from './useReflowText';
+import type { PdfMode } from '../../shared/types';
 
 const RULER_STEP = 24;
 const STORAGE_READ_ERROR = 'This document could not be read from storage.';
@@ -24,8 +28,16 @@ export interface ReaderPosition {
   numPages: number;
 }
 
+/** What a PDF is showing: which view, and whether its text could be reflowed. */
+export interface PdfView {
+  mode: PdfMode;
+  reflow: ReflowState['status'];
+}
+
 export interface ReaderHandle {
   goToPage(page: number): void;
+  /** Switches the open PDF between Pages and Reflow. */
+  setPdfMode(mode: PdfMode): void;
   /** Scrolls a text highlight into view, given its start offset. */
   goToHighlight(start: number): void;
 }
@@ -38,6 +50,8 @@ export interface ReaderCanvasProps {
   /** The plain text of the open document, for reading aloud. Empty when none. */
   onText?(text: string): void;
   onPosition?(position: ReaderPosition): void;
+  /** The open PDF's view, or null when no PDF is open. */
+  onPdfView?(view: PdfView | null): void;
   /** Offered from the error panel as the way out. */
   onOpenLibrary?(): void;
   ref?: Ref<ReaderHandle>;
@@ -46,7 +60,7 @@ export interface ReaderCanvasProps {
 type Loaded = { docId: string; kind: 'text'; text: string } | { docId: string; kind: 'binary'; data: ArrayBuffer };
 
 /** The reading area: picks the viewer for the open document's type. */
-export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition, onOpenLibrary, ref }: ReaderCanvasProps) {
+export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition, onPdfView, onOpenLibrary, ref }: ReaderCanvasProps) {
   const bionic = useUi((s) => s.bionic);
   const dyslexic = useUi((s) => s.dyslexic);
   const fontSize = useUi((s) => s.fontSize);
@@ -71,23 +85,10 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   const docId = doc?.id ?? null;
   const progress = useReadingProgress(docId);
 
-  const latest = useRef({ onText, onPosition });
-  latest.current = { onText, onPosition };
+  const latest = useRef({ onText, onPosition, onPdfView });
+  latest.current = { onText, onPosition, onPdfView };
 
   useAutoScroll(scrollRef, autoScroll, scrollSpeed);
-
-  // Arrow keys: up/down move the focus ruler while it is on, left/right turn
-  // PDF pages. Otherwise they keep their normal scrolling behaviour.
-  const hotkeys: HotkeyMap = {};
-  if (focusRuler) {
-    hotkeys.ArrowUp = () => setRulerY((y) => Math.max(0, y - RULER_STEP));
-    hotkeys.ArrowDown = () => setRulerY((y) => y + RULER_STEP);
-  }
-  if (doc?.type === 'pdf') {
-    hotkeys.ArrowRight = () => pdfRef.current?.goToPage(pdfPage.current + 1);
-    hotkeys.ArrowLeft = () => pdfRef.current?.goToPage(Math.max(1, pdfPage.current - 1));
-  }
-  useHotkeys(hotkeys);
 
   // Load the document's content: decoded text, or the raw bytes for a viewer.
   useEffect(() => {
@@ -124,6 +125,99 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   const data = current?.kind === 'binary' ? current.data : null;
   const error = failure && failure.docId === docId ? failure.message : null;
 
+  // PDFs open in Pages unless they were last read in Reflow; the choice is saved per document.
+  const isPdf = doc?.type === 'pdf';
+  const [modeState, setModeState] = useState<{ docId: string | null; mode: PdfMode }>({ docId: null, mode: 'pages' });
+  const resume = useRef<{ page: number; scrollTop: number } | null>(null);
+  const enteredBySwitch = useRef(false);
+  const placedReflow = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!docId || progress.initial === undefined || modeState.docId === docId) return;
+    pdfPage.current = progress.initial?.page ?? 1;
+    resume.current = null;
+    placedReflow.current = null;
+    setModeState({ docId, mode: isPdf ? (progress.initial?.pdfMode ?? 'pages') : 'pages' });
+  }, [docId, isPdf, progress.initial, modeState.docId]);
+
+  const knownMode = modeState.docId === docId ? modeState.mode : null;
+  const reflowOn = isPdf && knownMode === 'reflow';
+  const reflow = useReflowText(docId, data, reflowOn);
+  // A PDF with no readable text falls straight back to Pages.
+  const inReflow = reflowOn && reflow.status !== 'empty' && reflow.status !== 'error';
+  const reflowDoc = inReflow && reflow.status === 'ready' ? reflow.doc : null;
+
+  const choosePdfMode = (next: PdfMode) => {
+    if (!docId || !isPdf || knownMode === null || next === knownMode) return;
+    if (next === 'pages') resume.current = { page: pdfPage.current, scrollTop: 0 };
+    enteredBySwitch.current = next === 'reflow';
+    setModeState({ docId, mode: next });
+    progress.update({ pdfMode: next });
+  };
+
+  useEffect(() => {
+    if (!docId || !reflowOn || (reflow.status !== 'empty' && reflow.status !== 'error')) return;
+    setModeState({ docId, mode: 'pages' });
+    progress.update({ pdfMode: 'pages' });
+  }, [docId, reflowOn, reflow.status]);
+
+  useEffect(() => {
+    latest.current.onPdfView?.(isPdf && knownMode !== null ? { mode: knownMode, reflow: reflow.status } : null);
+  }, [isPdf, knownMode, reflow.status]);
+
+  // Read-aloud speaks the reflowed text.
+  useEffect(() => {
+    if (!reflowDoc) return;
+    latest.current.onText?.(reflowDoc.pages.flatMap((p) => p.paragraphs).join('\n\n'));
+    return () => latest.current.onText?.('');
+  }, [reflowDoc]);
+
+  // On entering Reflow, return to the page being read, or to the saved spot when reopening.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!reflowDoc || !scroller || !docId) {
+      if (!reflowDoc) placedReflow.current = null;
+      return;
+    }
+    if (placedReflow.current === docId) return;
+    placedReflow.current = docId;
+    const saved = progress.initial?.reflowScrollTop;
+    if (!enteredBySwitch.current && saved !== undefined) scroller.scrollTop = saved;
+    else scrollToReflowPage(scroller, pdfPage.current);
+    enteredBySwitch.current = false;
+    const page = reflowPageAt(scroller);
+    pdfPage.current = page;
+    latest.current.onPosition?.({ page, numPages: reflowDoc.pages.length });
+  }, [reflowDoc, docId, progress.initial]);
+
+  const goToPage = (page: number) => {
+    if (reflowDoc) {
+      const scroller = scrollRef.current;
+      if (scroller) scrollToReflowPage(scroller, Math.min(Math.max(1, Math.floor(page)), reflowDoc.pages.length));
+      return;
+    }
+    if (doc?.type === 'pdf') {
+      pdfRef.current?.goToPage(page);
+      return;
+    }
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = Math.max(0, page - 1) * (scroller.clientHeight || 0);
+  };
+
+  // Arrow keys: up/down move the focus ruler while it is on, left/right turn
+  // PDF pages. Otherwise they keep their normal scrolling behaviour.
+  const hotkeys: HotkeyMap = {};
+  if (focusRuler) {
+    hotkeys.ArrowUp = () => setRulerY((y) => Math.max(0, y - RULER_STEP));
+    hotkeys.ArrowDown = () => setRulerY((y) => y + RULER_STEP);
+  }
+  if (isPdf) {
+    hotkeys.ArrowRight = () => goToPage(pdfPage.current + 1);
+    hotkeys.ArrowLeft = () => goToPage(Math.max(1, pdfPage.current - 1));
+  }
+  useHotkeys(hotkeys);
+
   // Put the reader back where they left off in a text document, once per document.
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -152,15 +246,8 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   };
 
   useImperativeHandle(ref, () => ({
-    goToPage(page: number) {
-      if (doc?.type === 'pdf') {
-        pdfRef.current?.goToPage(page);
-        return;
-      }
-      const scroller = scrollRef.current;
-      if (!scroller) return;
-      scroller.scrollTop = Math.max(0, page - 1) * (scroller.clientHeight || 0);
-    },
+    goToPage,
+    setPdfMode: choosePdfMode,
     goToHighlight(start: number) {
       const marks = scrollRef.current?.querySelectorAll<HTMLElement>('mark[data-start]') ?? [];
       for (const mark of marks) {
@@ -175,7 +262,7 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   }));
 
   const opening = <p className="mx-auto max-w-[60ch] text-sm text-muted">Opening…</p>;
-  const showPdf = doc?.type === 'pdf' && !error;
+  const showPdf = isPdf && !error && !inReflow;
 
   let body: React.ReactNode = null;
   if (!doc) {
@@ -188,6 +275,14 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
     body = <ErrorPanel message={error} onClear={onOpenLibrary} />;
   } else if (doc.type === 'psd') {
     body = data ? <PsdInspector key={doc.id} data={data} zoom={zoom} onError={reportFailure} /> : opening;
+  } else if (inReflow) {
+    body = reflowDoc ? (
+      <ReflowView doc={reflowDoc} bionic={bionic} dyslexic={dyslexic} fontSize={Math.round((fontSize * zoom) / 100)} lineHeight={lineHeight} />
+    ) : (
+      <p role="status" className="mx-auto max-w-[72ch] text-sm text-muted">
+        {reflow.status === 'loading' && reflow.total > 0 ? `Preparing text… ${reflow.done} of ${reflow.total} pages` : 'Preparing text…'}
+      </p>
+    );
   } else if (doc.type === 'text' && text !== null) {
     body = (
       <TextView
@@ -220,8 +315,8 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
             ref={pdfRef}
             scrollRef={scrollRef}
             data={data}
-            initialPage={progress.initial?.page ?? 1}
-            initialScrollTop={progress.initial?.scrollTop ?? 0}
+            initialPage={resume.current?.page ?? progress.initial?.page ?? 1}
+            initialScrollTop={resume.current ? resume.current.scrollTop : (progress.initial?.scrollTop ?? 0)}
             zoom={zoom}
             nightPages={nightPages}
             onProgress={onPdfProgress}
@@ -238,6 +333,13 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
           data-testid="reader-scroll"
           className="h-full overflow-y-auto pl-12 pt-8"
           onScroll={(event) => {
+            if (reflowDoc) {
+              const page = reflowPageAt(event.currentTarget);
+              pdfPage.current = page;
+              progress.update({ page, reflowScrollTop: event.currentTarget.scrollTop });
+              latest.current.onPosition?.({ page, numPages: reflowDoc.pages.length });
+              return;
+            }
             if (!docId || text === null) return;
             const position = screenOf(event.currentTarget);
             progress.save(position.page, event.currentTarget.scrollTop);
