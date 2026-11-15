@@ -32,6 +32,10 @@ function press(init: KeyboardEventInit) {
 async function renderApp() {
   const view = render(<App />);
   await screen.findByRole('article');
+  // A slow first render can outlast the 3 s idle fade, which hides the chrome from queries: wake it, as a reader would.
+  act(() => {
+    window.dispatchEvent(new Event('pointermove'));
+  });
   return view;
 }
 
