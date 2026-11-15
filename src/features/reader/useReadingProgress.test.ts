@@ -98,6 +98,25 @@ describe('useReadingProgress', () => {
     expect(lib.saveProgress).toHaveBeenCalledWith(expect.anything(), { docId: 'a', page: 7, scrollTop: 1200, reflowScrollTop: 3000 });
   });
 
+  it('never exposes the previous document record during the render where the document changes', async () => {
+    lib.getProgress.mockResolvedValueOnce({ docId: 'a', page: 4, scrollTop: 1200, pdfMode: 'reflow' });
+    const seen: Array<{ id: string; initial: unknown }> = [];
+    const { result, rerender } = renderHook(
+      ({ id }) => {
+        const progress = useReadingProgress(id);
+        seen.push({ id, initial: progress.initial });
+        return progress;
+      },
+      { initialProps: { id: 'a' } },
+    );
+    await waitFor(() => expect(result.current.initial?.docId).toBe('a'));
+    lib.getProgress.mockReturnValueOnce(new Promise(() => {}));
+    rerender({ id: 'b' });
+    const forB = seen.filter((entry) => entry.id === 'b');
+    expect(forB.length).toBeGreaterThan(0);
+    for (const entry of forB) expect(entry.initial).toBeUndefined();
+  });
+
   it('does not write pdf fields for a document that never set them', async () => {
     const { result, unmount } = renderHook(() => useReadingProgress('a'));
     await waitFor(() => expect(result.current.initial).toBeNull());

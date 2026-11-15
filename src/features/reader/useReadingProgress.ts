@@ -18,7 +18,9 @@ export type PdfProgressPatch = Partial<Pick<ProgressRecord, 'page' | 'pdfMode' |
 
 /** Loads and saves where the reader is in a document. */
 export function useReadingProgress(docId: string | null): ReadingProgress {
-  const [initial, setInitial] = useState<ProgressRecord | null | undefined>(docId ? undefined : null);
+  // Tagged with its document, so a record is never shown for a different document than it belongs to.
+  const [loaded, setLoaded] = useState<{ docId: string; record: ProgressRecord | null } | null>(null);
+  const initial: ProgressRecord | null | undefined = docId ? (loaded?.docId === docId ? loaded.record : undefined) : null;
   const pending = useRef<ProgressRecord | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The latest known record, so a partial update never drops the rest of it. */
@@ -37,17 +39,13 @@ export function useReadingProgress(docId: string | null): ReadingProgress {
   }, []);
 
   useEffect(() => {
-    if (!docId) {
-      setInitial(null);
-      return;
-    }
+    if (!docId) return;
     let cancelled = false;
-    setInitial(undefined);
     latest.current = null;
     void getProgress(db, docId).then((record) => {
       if (cancelled) return;
       latest.current = record;
-      setInitial(record);
+      setLoaded({ docId, record });
     });
     return () => {
       cancelled = true;
