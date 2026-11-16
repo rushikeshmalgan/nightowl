@@ -66,15 +66,16 @@ Plan: `docs/superpowers/plans/2026-11-15-pdf-reflow.md` (8 tasks, one commit eac
 - **Reflow view:** a Pages / Reflow button in the status line switches a PDF to one readable text column. PDFs open in Pages; each PDF remembers its view and its reflow position. Hyphenated words are joined, repeated headers, footers and page numbers are dropped, and a "Page N" divider (not part of the text) marks each page.
 - **Reading settings apply:** font size, line spacing, Bionic reading and the dyslexia font work in Reflow (still disabled in Pages, with the reason); read-aloud speaks the reflowed text; switching views keeps your page.
 - **Scanned PDFs:** with no text to reflow, the PDF stays on Pages, a notice says why, and the switch is dimmed.
+- **Reader count:** tapping it opens a small panel ("N reading PDFs / PSDs / text"), so the room breakdown works on touch; the tooltip stays for the mouse.
 - **Bug fixed on the way:** the progress hook briefly handed a document the previous document's saved position and view.
 
-**Verified:** 726 unit tests, typecheck and build clean, and `npm run e2e -- --build` passes 67/67 against the production build with zero CSP violations. Five new checks run on an emulated 360×800 touch phone (an article-style PDF and a scanned one); screenshots were read.
+**Verified:** 732 unit tests, typecheck and build clean, and `npm run e2e -- --build` passes 67/67 against the production build with zero CSP violations. Five new checks run on an emulated 360×800 touch phone (an article-style PDF and a scanned one); screenshots were read.
 
-**Known limits:** tables come out as plain lines; Pages mode reports page N-1 at the very end of a short last page (pre-existing); the reader count's room breakdown (PDF / PSD / text readers) is still tooltip-only after the UI refresh, so it is not reachable on touch.
+**Known limits:** tables come out as plain lines; Pages mode reports page N-1 at the very end of a short last page (pre-existing).
 
 ## Next
 
-1. Merge `feat/ui-refresh` and `feat/pdf-reflow` into `main` (review first); make the room breakdown tappable.
+1. Merge `feat/ui-refresh` and `feat/pdf-reflow` into `main` (review first); 
 2. Phase 6: in-document search in the command palette.
 2. A whole-branch code review, then decide whether to merge `feat/nocturne-rebuild` and `feat/mobile-responsive` into `main`.
 3. Optional: host `lofi.mp3`, `rain.mp3`, `pink.mp3` and set `VITE_AUDIO_CDN_BASE`; add Sufi or YouTube presets.
