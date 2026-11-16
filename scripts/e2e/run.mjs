@@ -840,6 +840,21 @@ const groups = {
         await openFromLibrary('Annual Report.pdf');
         await page.waitForSelector('[data-testid="reader-scroll"] article', { timeout: 15000 });
       });
+      await check('phone', 'tapping the reader count shows who is reading what, fully on screen', async () => {
+        await awake();
+        const online = await page
+          .waitForFunction(() => document.querySelector('[data-testid="presence"]')?.dataset.status === 'online', undefined, { timeout: 12000 })
+          .then(() => true, () => false);
+        if (!online) return 'skipped: presence did not connect in this run';
+        await page.getByTestId('presence').tap();
+        const group = page.getByRole('group', { name: 'Readers by document type' });
+        await group.waitFor();
+        const box = await group.boundingBox();
+        expect(box.x >= 0 && box.x + box.width <= 360.5 && box.y + box.height <= 800, `the breakdown spans ${Math.round(box.x)}-${Math.round(box.x + box.width)} by ${Math.round(box.y + box.height)}px`);
+        expect(/reading PDFs/.test(await group.innerText()), 'the breakdown does not list PDF readers');
+        await shot(page, 'phone-presence');
+        await page.getByTestId('presence').tap();
+      });
     } finally {
       await context.close();
     }
