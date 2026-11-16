@@ -21,6 +21,12 @@ describe('Rail', () => {
     }
   });
 
+  it('pulses a tool that wants attention, calmly for anyone who prefers less motion', () => {
+    render(<Rail items={[{ id: 'rooms', label: 'Rooms', icon: null, pulse: true, onClick: vi.fn() }, items[0]]} />);
+    expect(screen.getByRole('button', { name: 'Rooms' }).className).toContain('motion-safe:animate-pulse');
+    expect(screen.getByRole('button', { name: 'Library' }).className).not.toContain('animate-pulse');
+  });
+
   it('scrolls instead of cutting tools off when the screen is short (a phone on its side)', () => {
     render(<Rail items={items} />);
     expect(screen.getByRole('navigation', { name: 'Tools' }).className).toContain('overflow-y-auto');

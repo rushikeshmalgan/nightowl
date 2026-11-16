@@ -89,6 +89,20 @@ describe('buildCommands', () => {
     expect(commands.some((c) => c.id === 'pdf-reflow')).toBe(false);
   });
 
+  it('offers to open rooms, and to leave one only while in a room', () => {
+    const open = vi.fn();
+    const leave = vi.fn();
+    const base = { ui, tts: { supported: false, toggle: () => {} } };
+    expect(buildCommands(base).some((c) => c.id === 'rooms-open')).toBe(false);
+    const outside = buildCommands({ ...base, rooms: { open, leave, joined: false } });
+    outside.find((c) => c.id === 'rooms-open')?.run();
+    expect(open).toHaveBeenCalled();
+    expect(outside.some((c) => c.id === 'rooms-leave')).toBe(false);
+    const inside = buildCommands({ ...base, rooms: { open, leave, joined: true } });
+    inside.find((c) => c.id === 'rooms-leave')?.run();
+    expect(leave).toHaveBeenCalled();
+  });
+
   it('toggles night pages', () => {
     const commands = buildCommands({ ui, tts: { supported: false, toggle: () => {} } });
     commands.find((c) => c.title === 'Toggle night pages')?.run();

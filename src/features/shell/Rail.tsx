@@ -11,6 +11,8 @@ export interface RailItem {
   pressed?: boolean;
   disabled?: boolean;
   disabledReason?: string;
+  /** Draws attention to a tool (something new happened in it) with a calm pulse. */
+  pulse?: boolean;
   onClick(): void;
 }
 
@@ -36,7 +38,7 @@ export function Rail({ items }: { items: RailItem[] }) {
             disabled={item.disabled}
             title={title}
             onClick={item.onClick}
-            className={`motion-color flex h-11 w-11 shrink-0 items-center justify-center rounded outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 sm:h-8 sm:w-8 ${
+            className={`motion-color flex h-11 w-11 shrink-0 items-center justify-center rounded outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 sm:h-8 sm:w-8 ${item.pulse ? 'text-accent motion-safe:animate-pulse ' : ''}${
               item.pressed ? 'bg-active text-ink' : 'text-muted hover:bg-surface hover:text-ink'
             }`}
           >

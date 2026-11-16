@@ -21,6 +21,15 @@ describe('useExclusiveSheets', () => {
     expect(open()).toEqual([false, false, true]);
   });
 
+  it('treats the rooms panel as a sheet too', () => {
+    renderHook(() => useExclusiveSheets(true));
+    act(() => useUi.getState().set('roomsOpen', true));
+    act(() => useUi.getState().set('audioOpen', true));
+    expect([useUi.getState().roomsOpen, useUi.getState().audioOpen]).toEqual([false, true]);
+    act(() => useUi.getState().set('roomsOpen', true));
+    expect([useUi.getState().roomsOpen, useUi.getState().audioOpen]).toEqual([true, false]);
+  });
+
   it('on a wide screen, side panels can stay open together', () => {
     renderHook(() => useExclusiveSheets(false));
     act(() => useUi.getState().set('tuningOpen', true));

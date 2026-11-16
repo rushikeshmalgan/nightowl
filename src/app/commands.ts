@@ -21,6 +21,8 @@ export interface CommandDeps {
   music?: { select(source: 'noise' | 'spotify' | 'youtube' | 'tracks'): void; toggle(): void };
   /** Text-styling commands that cannot act on the open document are left out of the palette. */
   blocked?: { bionic?: boolean; dyslexic?: boolean };
+  /** Reading rooms: open the panel, leave the room (offered only while in one). */
+  rooms?: { open(): void; leave(): void; joined: boolean };
   /** Set while a PDF is open: the current view and how to change it. */
   pdfView?: { mode: PdfMode; reflowAvailable: boolean; set(mode: PdfMode): void };
 }
@@ -34,7 +36,7 @@ const THEME_COMMANDS: Array<{ id: ThemeId; label: string }> = [
 ];
 
 /** The static command list for the palette. Later features append their own. */
-export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music, openFeedback, blocked, pdfView }: CommandDeps): Command[] {
+export function buildCommands({ ui, tts, documents = [], openDocument, requestClear, audio, sleep, music, openFeedback, blocked, pdfView, rooms }: CommandDeps): Command[] {
   const commands: Command[] = [
     ...(openDocument
       ? documents.map<Command>((doc) => ({
@@ -71,6 +73,10 @@ export function buildCommands({ ui, tts, documents = [], openDocument, requestCl
     if (pdfView.mode === 'reflow') {
       commands.push({ id: 'pdf-pages', title: 'Switch to Pages', group: 'View', keywords: ['pdf', 'layout', 'original'], run: () => pdfView.set('pages') });
     }
+  }
+  if (rooms) {
+    commands.push({ id: 'rooms-open', title: 'Open rooms', group: 'View', keywords: ['study', 'together', 'focus', 'friends', 'join'], run: () => rooms.open() });
+    if (rooms.joined) commands.push({ id: 'rooms-leave', title: 'Leave room', group: 'View', keywords: ['room', 'exit', 'quit'], run: () => rooms.leave() });
   }
   if (tts.supported) {
     commands.push({ id: 'tts', title: 'Read aloud', group: 'Audio', hotkey: 's', keywords: ['speech', 'voice', 'narrate'], run: () => tts.toggle() });
