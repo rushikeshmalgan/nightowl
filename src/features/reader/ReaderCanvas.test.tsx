@@ -214,6 +214,71 @@ describe('ReaderCanvas routing', () => {
   });
 });
 
+describe('ReaderCanvas exact text positions', () => {
+  const originalCaret = (document as unknown as { caretRangeFromPoint?: unknown }).caretRangeFromPoint;
+  afterEach(() => {
+    (document as unknown as { caretRangeFromPoint?: unknown }).caretRangeFromPoint = originalCaret;
+    delete (Range.prototype as unknown as { getBoundingClientRect?: unknown }).getBoundingClientRect;
+  });
+
+  /** The browser says the character at the top of the screen is the 4th one of the text. */
+  const caretAtThird = () => {
+    (document as unknown as { caretRangeFromPoint: unknown }).caretRangeFromPoint = () => {
+      const range = document.createRange();
+      range.setStart(document.querySelector('article [data-start]')!.firstChild!, 3);
+      return range;
+    };
+  };
+
+  it('reports where the text is as a character offset, once the text has loaded and as it scrolls', async () => {
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
+    await screen.findByRole('article');
+    caretAtThird();
+    fireEvent.scroll(screen.getByTestId('reader-scroll'));
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 3, length: 9 }));
+  });
+
+  it('reports the position as soon as a text document opens, before any scrolling', async () => {
+    caretAtThird();
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
+    await screen.findByRole('article');
+    await waitFor(() => expect(onPosition).toHaveBeenCalledWith(expect.objectContaining({ offset: 3, length: 9 })));
+  });
+
+  it('keeps a PDF position free of text fields', async () => {
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={binaryDoc('p', 'paper.pdf', 'pdf')} onPosition={onPosition} />);
+    await screen.findByTestId('pdf-viewer-stub');
+    act(() => pdfProps().onProgress({ page: 2, numPages: 5, scrollTop: 300 }));
+    expect(onPosition).toHaveBeenLastCalledWith({ page: 2, numPages: 5 });
+  });
+
+  it('scrolls a character to just under the status line', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={textDoc('a', 'a.txt', 'long text')} />);
+    await screen.findByRole('article');
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 500 }) });
+    const scroller = screen.getByTestId('reader-scroll');
+    scroller.scrollTop = 200;
+    act(() => ref.current?.goToOffset(4));
+    expect(scroller.scrollTop).toBe(200 + 500 - 0 - 40);
+  });
+
+  it('does nothing for an offset outside the text', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={textDoc('a', 'a.txt', 'long text')} />);
+    await screen.findByRole('article');
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 500 }) });
+    const scroller = screen.getByTestId('reader-scroll');
+    scroller.scrollTop = 200;
+    act(() => ref.current?.goToOffset(9999));
+    act(() => ref.current?.goToOffset(-3));
+    expect(scroller.scrollTop).toBe(200);
+  });
+});
+
 describe('ReaderCanvas PDF reflow', () => {
   const pdf = () => binaryDoc('p', 'paper.pdf', 'pdf');
   const readyDoc = {

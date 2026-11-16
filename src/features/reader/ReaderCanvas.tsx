@@ -15,6 +15,7 @@ import { PdfViewer } from '../pdf/PdfViewer';
 import type { PdfProgress, PdfViewerHandle } from '../pdf/PdfViewer';
 import { PsdInspector } from '../psd/PsdInspector';
 import { TextView } from './TextView';
+import { TEXT_TOP_MARGIN, rangeAtOffset, topOffset } from './textPosition';
 import { ReflowView, reflowPageAt, scrollToReflowPage } from './ReflowView';
 import { useReflowText } from './useReflowText';
 import type { ReflowState } from './useReflowText';
@@ -28,6 +29,9 @@ const STORAGE_READ_ERROR = 'This document could not be read from storage.';
 export interface ReaderPosition {
   page: number;
   numPages: number;
+  /** Text documents: the character at the top of the screen, and the length of the text. */
+  offset?: number;
+  length?: number;
 }
 
 /** What a PDF is showing: which view, and whether its text could be reflowed. */
@@ -42,6 +46,8 @@ export interface ReaderHandle {
   setPdfMode(mode: PdfMode): void;
   /** Scrolls a text highlight into view, given its start offset. */
   goToHighlight(start: number): void;
+  /** Scrolls a text document so the character at `offset` sits just under the status line. */
+  goToOffset(offset: number): void;
 }
 
 export interface ReaderCanvasProps {
@@ -229,7 +235,17 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
     if (restoredFor.current === docId) return;
     restoredFor.current = docId;
     scroller.scrollTop = progress.initial?.scrollTop ?? 0;
+    // Say where the reader is now, not only after the first scroll.
+    latest.current.onPosition?.(textPositionOf(scroller));
   }, [docId, text, progress.initial]);
+
+  /** The position of the open text document, with the exact character at the top when the browser can tell. */
+  const textPositionOf = (scroller: HTMLElement): ReaderPosition => {
+    const position = screenOf(scroller);
+    const article = scroller.querySelector('article');
+    const offset = article && text !== null ? topOffset(scroller, article) : null;
+    return offset === null || text === null ? position : { ...position, offset, length: text.length };
+  };
 
   const screenOf = (scroller: HTMLElement): ReaderPosition => {
     const viewport = scroller.clientHeight || 1;
@@ -252,6 +268,13 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   useImperativeHandle(ref, () => ({
     goToPage,
     setPdfMode: choosePdfMode,
+    goToOffset(offset: number) {
+      const scroller = scrollRef.current;
+      const article = scroller?.querySelector('article');
+      if (!scroller || !article || text === null || !Number.isFinite(offset) || offset < 0 || offset > text.length) return;
+      const rect = rangeAtOffset(article, Math.floor(offset))?.getBoundingClientRect?.();
+      if (rect) scroller.scrollTop += rect.top - scroller.getBoundingClientRect().top - TEXT_TOP_MARGIN;
+    },
     goToHighlight(start: number) {
       const marks = scrollRef.current?.querySelectorAll<HTMLElement>('mark[data-start]') ?? [];
       for (const mark of marks) {
@@ -345,7 +368,7 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
               return;
             }
             if (!docId || text === null) return;
-            const position = screenOf(event.currentTarget);
+            const position = textPositionOf(event.currentTarget);
             progress.save(position.page, event.currentTarget.scrollTop);
             latest.current.onPosition?.(position);
           }}
