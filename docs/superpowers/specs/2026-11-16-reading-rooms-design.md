@@ -45,14 +45,14 @@ Night readers study and read alone. A room lets a few people read **alongside** 
 
 ## 4. The design (approach B)
 
-**Joining.** A "Rooms" button on the rail (users icon) opens the Rooms panel: a bottom sheet below 640px (existing `SHEET_LAYOUT`, `SheetHandle`, `useExclusiveSheets`), a side drawer above. Not in a room, it offers "Create a room" and a code box. A link `…/#room=OWL4F2K` opens the app and offers to join (it asks first; it never joins silently). The code lives in the URL hash, which is not sent to any server.
+**Joining.** A "Rooms" button on the rail (users icon) opens the Rooms panel: a bottom sheet below 640px (existing `SHEET_LAYOUT`, `SheetHandle`, `useExclusiveSheets`), a side drawer above. Not in a room, it offers "Create a room" and a code box. A link `…/#room=OWL4F2K9X` opens the app and offers to join (it asks first; it never joins silently). The code lives in the URL hash, which is not sent to any server.
 
-**Codes.** 6 characters from a 31-character alphabet without look-alikes (no 0/O/1/I/L), shown as `OWL-4F2K`; about 887 million combinations. The channel is `nightowl-room:<code>`.
+**Codes.** 6 characters from a 31-character alphabet without look-alikes (no 0/O/1/I/L), shown as `OWL-4F2K9X`; about 887 million combinations. The channel is `nightowl-room:<code>`.
 
 **Members and size.** At most 8 per room; a full room says so. Each tab gets a random owl nickname (a word list, e.g. "Quiet Owl", "Night Heron") kept for the browser session, with a re-roll button before joining. The nickname is never typed by anyone.
 
 **What is sent.**
-- Presence (changes rarely, within the 5-per-30-seconds limit, via the existing throttled tracker): `{ nick, doc: 'pdf'|'psd'|'text'|'none', fp, status: 'reading'|'focus'|'away' }`. `away` after 2 minutes without input. `fp` is the document fingerprint (below), or empty when nothing is open.
+- Presence (changes rarely, within the 5-per-30-seconds limit, via the existing throttled tracker): `{ nick, doc: 'pdf'|'psd'|'text'|'none', fp, len, status: 'reading'|'focus'|'away' }`. `away` after 2 minutes without input. `fp` is the document fingerprint (below), or empty when nothing is open; `len` is the PDF page count or the text length in characters (0 otherwise), used with `fp` to decide "same document".
 - Broadcast: `progress { page, total, offset, length }` at most once per 10 seconds and only when it changed (`page` and `total` are PDF pages; for a text file `offset` and `length` are characters); `timer { durationMs }` when someone starts or stops it; `nudge { emoji }` limited to one per 3 seconds per sender.
 - Nothing else. Never a file name, never text, never an id beyond the random per-session key.
 
@@ -70,7 +70,7 @@ Night readers study and read alone. A room lets a few people read **alongside** 
 
 **Sketch (phone sheet)**
 ```
-Room  OWL-4F2K   [copy link]            ✕
+Room  OWL-4F2K9X   [copy link]            ✕
 ------------------------------------------
 Quiet Owl      PDF   p. 12 / 40   reading
   same document as you   [ Go to p. 12 ]
