@@ -106,3 +106,30 @@ export function createRateLimiter(minGapMs: number, now: () => number = Date.now
     return true;
   };
 }
+
+/** Where a reader can be taken: a PDF page, or an exact spot in a text file. */
+export type JumpTarget = { kind: 'page'; page: number } | { kind: 'offset'; offset: number; length: number };
+
+/** A text offset this far from where someone landed (about a screenful) counts as having moved on. */
+const TEXT_MOVED_ON_CHARS = 1500;
+
+/** Where to jump to reach what someone is reading, or null when there is nowhere to go. */
+export function jumpTargetOf(doc: DocKind, progress: Progress | null): JumpTarget | null {
+  if (!progress) return null;
+  if (doc === 'pdf' && progress.page !== undefined) return { kind: 'page', page: progress.page };
+  if (doc === 'text' && progress.offset !== undefined && progress.length) return { kind: 'offset', offset: progress.offset, length: progress.length };
+  return null;
+}
+
+/** "p. 7" or "41%". */
+export function formatTarget(target: JumpTarget): string {
+  return target.kind === 'page' ? `p. ${target.page}` : `${Math.round((target.offset / target.length) * 100)}%`;
+}
+
+/** True when the reader's place `now` is a different page, or a screen or more away, from where they landed. */
+export function movedAway(landed: JumpTarget, now: JumpTarget | null): boolean {
+  if (!now || now.kind !== landed.kind) return false;
+  if (landed.kind === 'page' && now.kind === 'page') return now.page !== landed.page;
+  if (landed.kind === 'offset' && now.kind === 'offset') return Math.abs(now.offset - landed.offset) > TEXT_MOVED_ON_CHARS;
+  return false;
+}

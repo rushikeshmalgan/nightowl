@@ -2,6 +2,9 @@ import {
   MAX_MEMBERS,
   createRateLimiter,
   formatPosition,
+  formatTarget,
+  jumpTargetOf,
+  movedAway,
   membersFromPresence,
   parseMeta,
   parseProgress,
@@ -126,5 +129,36 @@ describe('createRateLimiter', () => {
     expect(allowed()).toBe(false);
     now += 1;
     expect(allowed()).toBe(true);
+  });
+});
+
+describe('jump targets', () => {
+  it('is a PDF page or an exact text offset, taken from a member progress', () => {
+    expect(jumpTargetOf('pdf', { page: 12, total: 40 })).toEqual({ kind: 'page', page: 12 });
+    expect(jumpTargetOf('text', { offset: 620, length: 1000 })).toEqual({ kind: 'offset', offset: 620, length: 1000 });
+  });
+
+  it('is nothing when there is nowhere to jump', () => {
+    expect(jumpTargetOf('pdf', null)).toBeNull();
+    expect(jumpTargetOf('psd', { page: 1, total: 2 })).toBeNull();
+    expect(jumpTargetOf('text', { page: 1, total: 2 })).toBeNull();
+    expect(jumpTargetOf('pdf', { offset: 5, length: 10 })).toBeNull();
+  });
+
+  it('is labelled as a page or a percentage', () => {
+    expect(formatTarget({ kind: 'page', page: 7 })).toBe('p. 7');
+    expect(formatTarget({ kind: 'offset', offset: 410, length: 1000 })).toBe('41%');
+  });
+
+  it('has been left once the reader is on another page, or a screen or more away in a text', () => {
+    expect(movedAway({ kind: 'page', page: 12 }, { kind: 'page', page: 12 })).toBe(false);
+    expect(movedAway({ kind: 'page', page: 12 }, { kind: 'page', page: 13 })).toBe(true);
+    expect(movedAway({ kind: 'offset', offset: 5000, length: 9000 }, { kind: 'offset', offset: 5900, length: 9000 })).toBe(false);
+    expect(movedAway({ kind: 'offset', offset: 5000, length: 9000 }, { kind: 'offset', offset: 6600, length: 9000 })).toBe(true);
+  });
+
+  it('is never left when the reader place is unknown or of another kind', () => {
+    expect(movedAway({ kind: 'page', page: 12 }, null)).toBe(false);
+    expect(movedAway({ kind: 'page', page: 12 }, { kind: 'offset', offset: 1, length: 2 })).toBe(false);
   });
 });
