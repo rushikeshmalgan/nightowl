@@ -128,7 +128,7 @@ export function LibraryPanel({
   return (
     <section
       aria-label="Library"
-      className={`absolute bottom-0 left-12 top-8 flex w-72 flex-col border-r border-line bg-surface ${SHEET_LAYOUT}`}
+      className={`absolute bottom-14 left-12 top-8 flex w-72 flex-col border-r border-line bg-surface ${SHEET_LAYOUT}`}
     >
       {onClose ? <SheetHandle onClose={onClose} /> : null}
       <div className="flex items-center justify-between border-b border-line px-3 py-2">

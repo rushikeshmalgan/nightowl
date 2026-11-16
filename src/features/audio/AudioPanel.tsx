@@ -44,7 +44,7 @@ export function AudioPanel({ state, analyser, level, sleep, onClose, onToggle, o
   return (
     <section
       aria-label="Ambient sound"
-      className={`absolute bottom-0 left-12 top-8 flex w-72 flex-col overflow-y-auto border-r border-line bg-surface ${SHEET_LAYOUT}`}
+      className={`absolute bottom-14 left-12 top-8 flex w-72 flex-col overflow-y-auto border-r border-line bg-surface ${SHEET_LAYOUT}`}
     >
       {onClose ? <SheetHandle onClose={onClose} /> : null}
       <div className="flex flex-col gap-4 p-3">

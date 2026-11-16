@@ -79,7 +79,7 @@ export function TuningPanel({
       data-open={open}
       inert={!open}
       onMouseLeave={onMouseLeave}
-      className={`motion-slide absolute bottom-0 right-0 top-8 flex w-72 flex-col overflow-y-auto border-l border-line bg-surface ${SHEET_LAYOUT}`}
+      className={`motion-slide absolute bottom-14 right-0 top-8 flex w-72 flex-col overflow-y-auto border-l border-line bg-surface ${SHEET_LAYOUT}`}
       style={{ transform: open ? 'none' : offscreen }}
     >
       <SheetHandle onClose={() => ui.set('tuningOpen', false)} />
