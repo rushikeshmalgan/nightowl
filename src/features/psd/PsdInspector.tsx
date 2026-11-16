@@ -124,12 +124,12 @@ export function PsdInspector({ data, onError, zoom = 100 }: PsdInspectorProps) {
 
       <section aria-label="Layers" className="w-full shrink-0 border border-line bg-surface lg:w-80">
         <div className="flex items-baseline justify-between border-b border-line px-3 py-2">
-          <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted">Layers</h2>
-          <span className="font-mono text-[10px] tabular-nums text-muted">
+          <h2 className="font-serif text-lg text-ink">Layers</h2>
+          <span className="font-mono text-xs tabular-nums text-muted">
             <span>
               {parsed.width} × {parsed.height} px
             </span>
-            {' · '}
+            {', '}
             <span>
               {total} {total === 1 ? 'layer' : 'layers'}
             </span>
@@ -181,9 +181,9 @@ export function PsdInspector({ data, onError, zoom = 100 }: PsdInspectorProps) {
                     </span>
                     <span className={`min-w-0 flex-1 truncate ${visible ? '' : 'line-through'}`}>{layer.name}</span>
                     {layer.blendMode !== 'normal' && layer.blendMode !== 'pass through' ? (
-                      <span className="shrink-0 font-mono text-[10px] text-muted">{layer.blendMode}</span>
+                      <span className="shrink-0 font-mono text-xs text-muted">{layer.blendMode}</span>
                     ) : null}
-                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted">{opacity}%</span>
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-muted">{opacity}%</span>
                   </button>
                 </div>
                 {selected ? (

@@ -8,7 +8,8 @@ import { SHEET_LAYOUT } from './sheet';
 import { SheetHandle } from './SheetHandle';
 
 const THEMES: Array<{ id: ThemeId; label: string }> = [
-  { id: 'night', label: 'Night' },
+  { id: 'night', label: 'Lamp' },
+  { id: 'paper', label: 'Paper' },
   { id: 'sepia', label: 'Sepia' },
   { id: 'oled', label: 'OLED' },
   { id: 'crimson', label: 'Crimson' },
@@ -17,7 +18,7 @@ const THEMES: Array<{ id: ThemeId; label: string }> = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
-      <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted">{title}</h2>
+      <h2 className="font-serif text-lg text-ink">{title}</h2>
       {children}
     </section>
   );
@@ -49,7 +50,7 @@ function Toggle({
         }`}
       >
         <span>{label}</span>
-        <span className="font-mono text-[10px]">{blocked ? '—' : pressed ? 'ON' : 'OFF'}</span>
+        <span className="font-mono text-xs">{blocked ? '—' : pressed ? 'ON' : 'OFF'}</span>
       </button>
       {blocked ? <p className="text-[11px] leading-snug text-muted">{blockedReason}</p> : null}
     </div>
@@ -78,7 +79,7 @@ export function TuningPanel({
       data-open={open}
       inert={!open}
       onMouseLeave={onMouseLeave}
-      className={`motion-slide absolute bottom-0 right-0 top-8 flex w-72 flex-col overflow-y-auto border-l border-line bg-surface ${SHEET_LAYOUT}`}
+      className={`motion-slide absolute bottom-14 right-0 top-8 flex w-72 flex-col overflow-y-auto border-l border-line bg-surface ${SHEET_LAYOUT}`}
       style={{ transform: open ? 'none' : offscreen }}
     >
       <SheetHandle onClose={() => ui.set('tuningOpen', false)} />

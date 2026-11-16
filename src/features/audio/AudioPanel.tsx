@@ -44,13 +44,13 @@ export function AudioPanel({ state, analyser, level, sleep, onClose, onToggle, o
   return (
     <section
       aria-label="Ambient sound"
-      className={`absolute bottom-0 left-12 top-8 flex w-72 flex-col overflow-y-auto border-r border-line bg-surface ${SHEET_LAYOUT}`}
+      className={`absolute bottom-14 left-12 top-8 flex w-72 flex-col overflow-y-auto border-r border-line bg-surface ${SHEET_LAYOUT}`}
     >
       {onClose ? <SheetHandle onClose={onClose} /> : null}
       <div className="flex flex-col gap-4 p-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted">Night noise</h2>
-        <span className="flex items-center gap-2 font-mono text-[10px] text-muted">
+        <h2 className="font-serif text-lg text-ink">Night noise</h2>
+        <span className="flex items-center gap-2 font-mono text-xs text-muted">
           {state.source ? <span>{SOURCE_LABEL[state.source]}</span> : null}
           <LedPulse level={level} source={state.source} />
         </span>

@@ -4,7 +4,7 @@ import { KELVIN_MAX, KELVIN_MIN } from './warmth';
 import { DEFAULT_SETTINGS, useUi } from './ui';
 import type { UiSettings } from './ui';
 
-const THEMES = ['night', 'sepia', 'oled', 'crimson'];
+const THEMES = ['night', 'paper', 'sepia', 'oled', 'crimson'];
 
 const inRange = (min: number, max: number) => (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;

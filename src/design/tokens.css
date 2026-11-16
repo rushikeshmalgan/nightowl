@@ -1,48 +1,66 @@
 /*
  * NightOwl design tokens.
- * Each theme sets the same five variables; Tailwind utilities (bg-canvas,
+ * Each theme sets the same seven variables; Tailwind utilities (bg-canvas,
  * text-ink, border-line, ...) read them through the @theme block below.
+ *
+ * Dark themes are warm, like lamplight on paper, not cool slate. The light
+ * theme is paper, with an ink-brown text colour rather than black.
  */
 
 :root,
 [data-theme='night'] {
-  --canvas: #090a0f;
-  --surface: #12141c;
-  --ink: #e2e8f0;
-  --muted: #64748b;
-  --accent: #f59e0b;
-  --active: #3a4034;
-  --line: rgb(255 255 255 / 0.05);
+  --canvas: #15120e;
+  --surface: #1e1a15;
+  --ink: #ece3d3;
+  --muted: #a39782;
+  --accent: #e9a54a;
+  --active: #322b22;
+  --line: rgb(236 227 211 / 0.09);
+  color-scheme: dark;
+}
+
+[data-theme='paper'] {
+  --canvas: #f5efe2;
+  --surface: #fdfaf2;
+  --ink: #2b251d;
+  --muted: #6e6351;
+  --accent: #9a5a14;
+  --active: #e8dfcb;
+  --line: rgb(43 37 29 / 0.12);
+  color-scheme: light;
 }
 
 [data-theme='sepia'] {
-  --canvas: #1b1713;
-  --surface: #26211c;
-  --ink: #d6c7b2;
-  --muted: #8a7a66;
+  --canvas: #1d1812;
+  --surface: #2a231b;
+  --ink: #dcc9ab;
+  --muted: #9b8a70;
   --accent: #e5a95d;
-  --active: #3a3229;
-  --line: rgb(255 240 220 / 0.07);
+  --active: #3a3024;
+  --line: rgb(255 240 220 / 0.09);
+  color-scheme: dark;
 }
 
 [data-theme='oled'] {
   --canvas: #000000;
-  --surface: #0a0a0a;
-  --ink: #a0a0a0;
-  --muted: #5c5c5c;
-  --accent: #f59e0b;
+  --surface: #0b0b0b;
+  --ink: #b4b4b4;
+  --muted: #7a7a7a;
+  --accent: #f0a845;
   --active: #1c1c1c;
-  --line: rgb(255 255 255 / 0.08);
+  --line: rgb(255 255 255 / 0.09);
+  color-scheme: dark;
 }
 
 [data-theme='crimson'] {
-  --canvas: #120505;
-  --surface: #1c0a0a;
-  --ink: #f87171;
-  --muted: #7f3a3a;
-  --accent: #ef4444;
-  --active: #3b1212;
-  --line: rgb(255 120 120 / 0.1);
+  --canvas: #140707;
+  --surface: #1f0d0d;
+  --ink: #f5b7b7;
+  --muted: #a86a6a;
+  --accent: #ef6a6a;
+  --active: #3b1414;
+  --line: rgb(255 140 140 / 0.12);
+  color-scheme: dark;
 }
 
 @theme {

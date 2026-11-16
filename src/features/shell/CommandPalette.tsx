@@ -58,7 +58,7 @@ export function CommandPalette({ open, onOpenChange, commands, dynamic }: Comman
           <Cmdk.Group
             key={group}
             heading={group}
-            className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted"
+            className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted"
           >
             {items.map((command) => (
               <Cmdk.Item
@@ -69,7 +69,7 @@ export function CommandPalette({ open, onOpenChange, commands, dynamic }: Comman
               >
                 <span>{command.title}</span>
                 {command.hotkey ? (
-                  <kbd className="font-mono text-[10px] text-muted">{formatHotkey(command.hotkey)}</kbd>
+                  <kbd className="font-mono text-xs text-muted">{formatHotkey(command.hotkey)}</kbd>
                 ) : null}
               </Cmdk.Item>
             ))}

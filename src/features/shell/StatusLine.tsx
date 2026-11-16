@@ -25,7 +25,7 @@ export function StatusLine({ title, flags = [], children }: StatusLineProps) {
       {narrow
         ? null
         : flags.map((flag) => (
-            <span key={flag} className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-accent">
+            <span key={flag} className="shrink-0 text-xs font-medium text-accent">
               {flag}
             </span>
           ))}
