@@ -88,4 +88,5 @@ Exact word lists and copy; timing constants within the limits above; how a late 
 6. Timer lengths 15 / 25 / 45 minutes; local countdown; no sound.
 7. Rooms vanish when empty; nothing is stored.
 8. Rooms are off when offline, with the reason shown.
+10. The 8-member cap is checked after joining: if more than 8 are present, the members whose random keys sort last leave with "This room is full", so two simultaneous joiners cannot both stay. Two people starting the timer together: the later message wins. "In focus" simply means a timer is running.
 9. Rooms sit on top of the Reflow and UI-refresh branches (rail, status line and sheets are shared), so they merge after those.
