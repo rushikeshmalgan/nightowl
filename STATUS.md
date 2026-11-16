@@ -73,11 +73,25 @@ Plan: `docs/superpowers/plans/2026-11-15-pdf-reflow.md` (8 tasks, one commit eac
 
 **Known limits:** tables come out as plain lines; Pages mode reports page N-1 at the very end of a short last page (pre-existing).
 
+## Reading rooms (branch `feat/reading-rooms`, stacked on `feat/pdf-reflow`)
+
+Spec: `docs/superpowers/specs/2026-11-16-reading-rooms-design.md`. Plan: `docs/superpowers/plans/2026-11-16-reading-rooms.md` (7 tasks, one commit each, tests first, plus one fix found on the way).
+
+- **Rooms button** (rail; a bottom sheet on a phone, a drawer on desktop). Create a room and get a code like `OWL-4F2K9X`, or join by typing a code or opening a `#room=CODE` link (it asks first, never joins silently). Up to 8 people. No accounts, no chat: each tab gets a random owl nickname.
+- **Who is in:** nickname, document type, position (`p. 12 / 40` for a PDF, `62%` for text) and status (reading, focus, away after 2 minutes without input).
+- **Same document:** each app shares only a short fingerprint of the open file (size plus the first, middle and last 64 KB), never a name. When two people have the same file, a row says "same document as you" with **Go to p. 12** (or **Go to 62%**, to the exact character) and then **Back to p. 7**.
+- **Focus timer** (15 / 25 / 45 minutes, counted down on each device; Stop affects only your own screen) and four emoji nudges (👋 🔥 ☕ 🌙). A nudge or a finished timer pulses the Rooms button while the panel is closed. No sound.
+- **Free tier:** one Realtime channel per room on the connection the reader count already uses; progress is sent at most every 10 seconds and only when it changed, nudges at most every 3 seconds. Rooms are disabled with "Rooms need a connection" in local mode.
+- **Fix found on the way:** a text file's exact position used the browser's "what is under this point" lookup, which on a phone returns the sheet's backdrop, so a reader with the Rooms sheet open would have reported position 0. It now measures the text's own boxes.
+
+**Verified:** 867 unit tests, typecheck and build clean, and `npm run e2e -- --build` passes 77/77 against the production build with zero CSP violations. The `rooms` browser group runs a desktop and a 360×800 phone in one room against the live connection (create, join by link, same long text file with an exact jump and Back, same PDF with Go to and Back, nudge pulse, timer, layout inside 360px, leaving); it reports "skipped" when the connection cannot be made. Screenshots were read.
+
+**Known limits:** same-document detection matches identical copies only (a re-saved PDF will not match); the ninth-member rule is unit-tested but not exercised in a browser; Pages mode still counts the page above when a short last page cannot scroll to the top (pre-existing).
+
 ## Next
 
-1. Merge `feat/ui-refresh` and `feat/pdf-reflow` into `main` (review first); 
+1. Review, then merge in order: `feat/ui-refresh`, `feat/pdf-reflow`, `feat/reading-rooms` (each is stacked on the one before).
 2. Phase 6: in-document search in the command palette.
-2. A whole-branch code review, then decide whether to merge `feat/nocturne-rebuild` and `feat/mobile-responsive` into `main`.
 3. Optional: host `lofi.mp3`, `rain.mp3`, `pink.mp3` and set `VITE_AUDIO_CDN_BASE`; add Sufi or YouTube presets.
 
 ## Resuming
