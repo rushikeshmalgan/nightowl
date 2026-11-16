@@ -12,6 +12,7 @@ Night readers study and read alone. A room lets a few people read **alongside** 
 - Create a room and get a short code; join by typing the code or opening a link; leave at any time.
 - See each member: a random owl nickname, the kind of document open (PDF / PSD / text), progress (page of total), and a status (reading, in focus, away).
 - **Same document:** when two members have the same file open, their rows say "same document" and a **Go to their page** button jumps your view to where they are (once, on tap; it never follows or moves your screen by itself). Titles are never shared, so this works without them.
+- **Back to where you were:** after a jump, a **Back to p. 7** button (or "Back to 41%") appears on that row until you use it, scroll on, or open another document; it returns you to the spot you left.
 - A shared focus timer (15, 25 or 45 minutes) that anyone in the room can start; everyone sees the same countdown.
 - A few fixed emoji nudges (👋 🔥 ☕ 🌙) that appear briefly for everyone.
 - Works on a phone (bottom sheet) and on desktop (side panel), with 44px touch targets on a phone.
@@ -52,12 +53,14 @@ Night readers study and read alone. A room lets a few people read **alongside** 
 
 **What is sent.**
 - Presence (changes rarely, within the 5-per-30-seconds limit, via the existing throttled tracker): `{ nick, doc: 'pdf'|'psd'|'text'|'none', fp, status: 'reading'|'focus'|'away' }`. `away` after 2 minutes without input. `fp` is the document fingerprint (below), or empty when nothing is open.
-- Broadcast: `progress { page, total, fraction }` at most once per 10 seconds and only when it changed (`fraction` is how far through the document, 0 to 1); `timer { durationMs }` when someone starts or stops it; `nudge { emoji }` limited to one per 3 seconds per sender.
+- Broadcast: `progress { page, total, offset, length }` at most once per 10 seconds and only when it changed (`page` and `total` are PDF pages; for a text file `offset` and `length` are characters); `timer { durationMs }` when someone starts or stops it; `nudge { emoji }` limited to one per 3 seconds per sender.
 - Nothing else. Never a file name, never text, never an id beyond the random per-session key.
 
-**Same document.** Each app computes a short fingerprint of the open file: a SHA-256 over the file size plus its first and last 64 KB, cut to 16 hex characters (fast even for a large PSD, and enough to tell files apart). It is computed only while in a room, cached per document, and shared in presence. Two members with the same fingerprint are "on the same document". The fingerprint cannot be turned back into the file or its name, though someone who already holds the same file can tell that it matches; that only happens inside a room you chose to join.
+**Same document.** Each app computes a short fingerprint of the open file: a SHA-256 over the file size plus its first, middle and last 64 KB, cut to 16 hex characters (fast even for a large PSD). Two members count as being on the same document only if the fingerprint **and** the document's page count (PDF) or length (text) both match, which makes a chance match between different files very unlikely. This recognises identical copies, such as the same download; a re-saved or edited copy has a different fingerprint and will not match, and its rows simply show page numbers without the jump. It is computed only while in a room, cached per document, and shared in presence. Two members with the same fingerprint are "on the same document". The fingerprint cannot be turned back into the file or its name, though someone who already holds the same file can tell that it matches; that only happens inside a room you chose to join.
 
-**How position is shown and followed.** A PDF shows `p. 12 / 40`; the page number is the PDF's own, identical in Pages and Reflow and on every device. A text file shows a percentage (`62%`), because its "page" is a screenful and differs between a phone and a desktop. **Go to their page** jumps a PDF to that page, and a text file to that fraction of its length. It changes your view once, and only when you tap.
+**How position is shown and followed.** A PDF shows `p. 12 / 40`; the page number is the PDF's own, identical in Pages and Reflow and on every device. A text file shows a percentage (`62%`), but what is shared is the exact character position at the top of the reader's screen (the reader already tracks text by character position for highlights), because a text "page" is a screenful and differs between a phone and a desktop. **Go to their page** jumps a PDF to that page and a text file to that exact spot, scrolled into view. It changes your view once, and only when you tap; afterwards **Back to p. 7** (or "Back to 41%") returns you to where you were.
+
+**Rows on a narrow screen.** A row is one line (nickname, type, position, status) that wraps instead of truncating; the "same document" label and the Go to / Back button sit on a second line, each button at least 44px tall. It must hold up with large system text, and the list scrolls inside the sheet.
 
 **Focus timer.** Anyone starts 15, 25 or 45 minutes; the starter's message carries the duration and every client counts down locally from when it receives it (a second or two of drift is fine). A late joiner is told the remaining time by a member. When it ends, members see a quiet "Focus complete" line in the panel and the rail button; no sound. Starting a new one replaces the old. Anyone can stop it for themselves.
 
@@ -78,7 +81,7 @@ Focus  [ 15 ] [ 25 ] [ 45 ]     18:00 left
 [ 👋 ] [ 🔥 ] [ ☕ ] [ 🌙 ]      [ Leave ]
 ```
 
-**Where it lives.** New `src/features/rooms/`: pure helpers (code generation and parsing, nickname list, member summary, rate limits) with node tests; a `useRoom` hook over a fake Realtime channel in tests; `RoomPanel`. Also `src/features/rooms/fingerprint.ts` (the file fingerprint), and in the reader a `fraction` on `ReaderPosition` plus `ReaderHandle.goToFraction` (`ReaderCanvas.tsx`) to follow a text file. Touches `src/features/shell/ui.ts` (a `roomsOpen` panel flag), `useExclusiveSheets.ts`, `src/app/App.tsx` (rail item, panel, hash join, progress and document type feed), `src/app/commands.ts` ("Open rooms", "Leave room") and the e2e suite.
+**Where it lives.** New `src/features/rooms/`: pure helpers (code generation and parsing, nickname list, member summary, rate limits) with node tests; a `useRoom` hook over a fake Realtime channel in tests; `RoomPanel`. Also `src/features/rooms/fingerprint.ts` (the file fingerprint), and in the reader an `offset` and `length` on `ReaderPosition` (the character at the top of a text file's screen, found with the existing `offsetsFromRange` helper) plus `ReaderHandle.goToOffset` (`ReaderCanvas.tsx`, building on `goToHighlight`) to follow a text file, and a remembered pre-jump position for the Back button. Touches `src/features/shell/ui.ts` (a `roomsOpen` panel flag), `useExclusiveSheets.ts`, `src/app/App.tsx` (rail item, panel, hash join, progress and document type feed), `src/app/commands.ts` ("Open rooms", "Leave room") and the e2e suite.
 
 ## 5. Left to the builder
 
@@ -91,9 +94,16 @@ Exact word lists and copy; timing constants within the limits above; how a late 
 3. Codes of 6 characters, join by code or a hash link, always confirmed before joining.
 4. Random nicknames, not editable except a re-roll; no accounts.
 5. Progress shown as page / total for PDFs and a percentage for text files (screenful pages differ between devices), at most once per 10 seconds.
-11. Same-document detection uses a 16-character fingerprint of size plus the first and last 64 KB, not a full-file hash, so it stays fast for large files. Titles are never shared and there is no title switch: the owner picked same-file detection only.
+11. Same-document detection uses a 16-character fingerprint of size plus the first, middle and last 64 KB (and also requires the same page count or length), not a full-file hash, so it stays fast for large files. It matches identical copies only. Titles are never shared and there is no title switch: the owner picked same-file detection only.
 6. Timer lengths 15 / 25 / 45 minutes; local countdown; no sound.
 7. Rooms vanish when empty; nothing is stored.
 8. Rooms are off when offline, with the reason shown.
 10. The 8-member cap is checked after joining: if more than 8 are present, the members whose random keys sort last leave with "This room is full", so two simultaneous joiners cannot both stay. Two people starting the timer together: the later message wins. "In focus" simply means a timer is running.
-9. Rooms sit on top of the Reflow and UI-refresh branches (rail, status line and sheets are shared), so they merge after those.
+9. Rooms sit on top of the Reflow and UI-refresh branches (rail, status line and sheets are shared), so they merge after those. Because the branch is stacked on them, the whole feature can be built and checked end to end now; only the merge order waits.
+12. A **Back to p. 7** button after a jump, so a peek ahead never loses your place (from an outside review of this design).
+13. Text jumps use the exact character position, not a percentage of the scroll height.
+
+## 7. Possible later (not in this project)
+
+- A quiet cue when everyone in the room has reached the same page.
+- A content-based fingerprint (from the PDF's text) so a re-saved copy of the same book still matches.
