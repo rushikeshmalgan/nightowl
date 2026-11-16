@@ -215,36 +215,70 @@ describe('ReaderCanvas routing', () => {
 });
 
 describe('ReaderCanvas exact text positions', () => {
-  const originalCaret = (document as unknown as { caretRangeFromPoint?: unknown }).caretRangeFromPoint;
   afterEach(() => {
-    (document as unknown as { caretRangeFromPoint?: unknown }).caretRangeFromPoint = originalCaret;
     delete (Range.prototype as unknown as { getBoundingClientRect?: unknown }).getBoundingClientRect;
   });
 
-  /** The browser says the character at the top of the screen is the 4th one of the text. */
-  const caretAtThird = () => {
-    (document as unknown as { caretRangeFromPoint: unknown }).caretRangeFromPoint = () => {
-      const range = document.createRange();
-      range.setStart(document.querySelector('article [data-start]')!.firstChild!, 3);
-      return range;
-    };
+  /** Lays the text out in lines of 3 characters, 20px tall from the top: the cut-off (y=40) falls on the third line, offset 6. */
+  const layOutLines = () => {
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: Range) {
+        const article = document.querySelector('article')!;
+        const before = document.createRange();
+        before.selectNodeContents(article);
+        before.setEnd(this.startContainer, this.startOffset);
+        const top = Math.floor(before.toString().length / 3) * 20;
+        return { top, bottom: top + 20, height: 20, width: 8 };
+      },
+    });
   };
 
   it('reports where the text is as a character offset, once the text has loaded and as it scrolls', async () => {
     const onPosition = vi.fn();
     render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
     await screen.findByRole('article');
-    caretAtThird();
+    layOutLines();
     fireEvent.scroll(screen.getByTestId('reader-scroll'));
-    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 3, length: 9 }));
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 6, length: 9 }));
   });
 
   it('reports the position as soon as a text document opens, before any scrolling', async () => {
-    caretAtThird();
+    layOutLines();
     const onPosition = vi.fn();
     render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
     await screen.findByRole('article');
-    await waitFor(() => expect(onPosition).toHaveBeenCalledWith(expect.objectContaining({ offset: 3, length: 9 })));
+    await waitFor(() => expect(onPosition).toHaveBeenCalledWith(expect.objectContaining({ offset: 6, length: 9 })));
+  });
+
+  it('measures the text once at once while scrolling, then at most every 120 ms, ending on the latest place', async () => {
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
+    await screen.findByRole('article');
+    layOutLines();
+    const scroller = screen.getByTestId('reader-scroll');
+    const before = onPosition.mock.calls.length;
+    vi.useFakeTimers();
+    try {
+      fireEvent.scroll(scroller);
+      fireEvent.scroll(scroller);
+      fireEvent.scroll(scroller);
+      expect(onPosition.mock.calls.length).toBe(before + 1);
+      act(() => {
+        vi.advanceTimersByTime(119);
+      });
+      expect(onPosition.mock.calls.length).toBe(before + 1);
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(onPosition.mock.calls.length).toBe(before + 2);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onPosition.mock.calls.length).toBe(before + 2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps a PDF position free of text fields', async () => {

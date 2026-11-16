@@ -15,7 +15,7 @@ import { PdfViewer } from '../pdf/PdfViewer';
 import type { PdfProgress, PdfViewerHandle } from '../pdf/PdfViewer';
 import { PsdInspector } from '../psd/PsdInspector';
 import { TextView } from './TextView';
-import { TEXT_TOP_MARGIN, rangeAtOffset, topOffset } from './textPosition';
+import { TEXT_TOP_MARGIN, rectAtOffset, topOffset } from './textPosition';
 import { ReflowView, reflowPageAt, scrollToReflowPage } from './ReflowView';
 import { useReflowText } from './useReflowText';
 import type { ReflowState } from './useReflowText';
@@ -24,6 +24,8 @@ import { REFLOW_EMPTY_REASON, REFLOW_READ_ERROR } from './reflowMessages';
 import { X } from 'lucide-react';
 
 const RULER_STEP = 24;
+/** The exact text position is measured at most this often while scrolling: measuring walks all the text. */
+const POSITION_GAP_MS = 120;
 const STORAGE_READ_ERROR = 'This document could not be read from storage.';
 
 export interface ReaderPosition {
@@ -85,6 +87,7 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
   const pdfRef = useRef<PdfViewerHandle>(null);
   const pdfPage = useRef(1);
   const restoredFor = useRef<string | null>(null);
+  const positionGate = useRef<{ timer: ReturnType<typeof setTimeout> | null; dirty: boolean }>({ timer: null, dirty: false });
 
   const [rulerY, setRulerY] = useState(250);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -247,6 +250,34 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
     return offset === null || text === null ? position : { ...position, offset, length: text.length };
   };
 
+  /** Reports the text position at once, then at most every POSITION_GAP_MS, ending on the latest place. */
+  const reportTextPosition = (scroller: HTMLElement) => {
+    const gate = positionGate.current;
+    if (gate.timer) {
+      gate.dirty = true;
+      return;
+    }
+    latest.current.onPosition?.(textPositionOf(scroller));
+    gate.timer = setTimeout(() => {
+      gate.timer = null;
+      if (gate.dirty) {
+        gate.dirty = false;
+        reportTextPosition(scroller);
+      }
+    }, POSITION_GAP_MS);
+  };
+
+  // A pending report belongs to the document it was made for.
+  useEffect(
+    () => () => {
+      const gate = positionGate.current;
+      if (gate.timer) clearTimeout(gate.timer);
+      gate.timer = null;
+      gate.dirty = false;
+    },
+    [docId],
+  );
+
   const screenOf = (scroller: HTMLElement): ReaderPosition => {
     const viewport = scroller.clientHeight || 1;
     return {
@@ -272,7 +303,7 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
       const scroller = scrollRef.current;
       const article = scroller?.querySelector('article');
       if (!scroller || !article || text === null || !Number.isFinite(offset) || offset < 0 || offset > text.length) return;
-      const rect = rangeAtOffset(article, Math.floor(offset))?.getBoundingClientRect?.();
+      const rect = rectAtOffset(article, Math.floor(offset));
       if (rect) scroller.scrollTop += rect.top - scroller.getBoundingClientRect().top - TEXT_TOP_MARGIN;
     },
     goToHighlight(start: number) {
@@ -368,9 +399,9 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
               return;
             }
             if (!docId || text === null) return;
-            const position = textPositionOf(event.currentTarget);
-            progress.save(position.page, event.currentTarget.scrollTop);
-            latest.current.onPosition?.(position);
+            const scroller = event.currentTarget;
+            progress.save(screenOf(scroller).page, scroller.scrollTop);
+            reportTextPosition(scroller);
           }}
         >
           {/* Bottom padding clears the 56px music dock. */}
