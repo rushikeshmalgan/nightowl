@@ -11,6 +11,7 @@ Night readers study and read alone. A room lets a few people read **alongside** 
 **Goals**
 - Create a room and get a short code; join by typing the code or opening a link; leave at any time.
 - See each member: a random owl nickname, the kind of document open (PDF / PSD / text), progress (page of total), and a status (reading, in focus, away).
+- **Same document:** when two members have the same file open, their rows say "same document" and a **Go to their page** button jumps your view to where they are (once, on tap; it never follows or moves your screen by itself). Titles are never shared, so this works without them.
 - A shared focus timer (15, 25 or 45 minutes) that anyone in the room can start; everyone sees the same countdown.
 - A few fixed emoji nudges (👋 🔥 ☕ 🌙) that appear briefly for everyone.
 - Works on a phone (bottom sheet) and on desktop (side panel), with 44px touch targets on a phone.
@@ -50,9 +51,13 @@ Night readers study and read alone. A room lets a few people read **alongside** 
 **Members and size.** At most 8 per room; a full room says so. Each tab gets a random owl nickname (a word list, e.g. "Quiet Owl", "Night Heron") kept for the browser session, with a re-roll button before joining. The nickname is never typed by anyone.
 
 **What is sent.**
-- Presence (changes rarely, within the 5-per-30-seconds limit, via the existing throttled tracker): `{ nick, doc: 'pdf'|'psd'|'text'|'none', status: 'reading'|'focus'|'away' }`. `away` after 2 minutes without input.
-- Broadcast: `progress { page, total }` at most once per 10 seconds and only when it changed; `timer { durationMs }` when someone starts or stops it; `nudge { emoji }` limited to one per 3 seconds per sender.
+- Presence (changes rarely, within the 5-per-30-seconds limit, via the existing throttled tracker): `{ nick, doc: 'pdf'|'psd'|'text'|'none', fp, status: 'reading'|'focus'|'away' }`. `away` after 2 minutes without input. `fp` is the document fingerprint (below), or empty when nothing is open.
+- Broadcast: `progress { page, total, fraction }` at most once per 10 seconds and only when it changed (`fraction` is how far through the document, 0 to 1); `timer { durationMs }` when someone starts or stops it; `nudge { emoji }` limited to one per 3 seconds per sender.
 - Nothing else. Never a file name, never text, never an id beyond the random per-session key.
+
+**Same document.** Each app computes a short fingerprint of the open file: a SHA-256 over the file size plus its first and last 64 KB, cut to 16 hex characters (fast even for a large PSD, and enough to tell files apart). It is computed only while in a room, cached per document, and shared in presence. Two members with the same fingerprint are "on the same document". The fingerprint cannot be turned back into the file or its name, though someone who already holds the same file can tell that it matches; that only happens inside a room you chose to join.
+
+**How position is shown and followed.** A PDF shows `p. 12 / 40`; the page number is the PDF's own, identical in Pages and Reflow and on every device. A text file shows a percentage (`62%`), because its "page" is a screenful and differs between a phone and a desktop. **Go to their page** jumps a PDF to that page, and a text file to that fraction of its length. It changes your view once, and only when you tap.
 
 **Focus timer.** Anyone starts 15, 25 or 45 minutes; the starter's message carries the duration and every client counts down locally from when it receives it (a second or two of drift is fine). A late joiner is told the remaining time by a member. When it ends, members see a quiet "Focus complete" line in the panel and the rail button; no sound. Starting a new one replaces the old. Anyone can stop it for themselves.
 
@@ -65,14 +70,15 @@ Night readers study and read alone. A room lets a few people read **alongside** 
 Room  OWL-4F2K   [copy link]            ✕
 ------------------------------------------
 Quiet Owl      PDF   p. 12 / 40   reading
-Night Heron    text  p. 3 / 18    reading
-You            PDF   p. 7 / 22    focus
+  same document as you   [ Go to p. 12 ]
+Night Heron    text  62%          reading
+You            PDF   p. 7 / 40    focus
 ------------------------------------------
 Focus  [ 15 ] [ 25 ] [ 45 ]     18:00 left
 [ 👋 ] [ 🔥 ] [ ☕ ] [ 🌙 ]      [ Leave ]
 ```
 
-**Where it lives.** New `src/features/rooms/`: pure helpers (code generation and parsing, nickname list, member summary, rate limits) with node tests; a `useRoom` hook over a fake Realtime channel in tests; `RoomPanel`. Touches `src/features/shell/ui.ts` (a `roomsOpen` panel flag), `useExclusiveSheets.ts`, `src/app/App.tsx` (rail item, panel, hash join, progress and document type feed), `src/app/commands.ts` ("Open rooms", "Leave room") and the e2e suite.
+**Where it lives.** New `src/features/rooms/`: pure helpers (code generation and parsing, nickname list, member summary, rate limits) with node tests; a `useRoom` hook over a fake Realtime channel in tests; `RoomPanel`. Also `src/features/rooms/fingerprint.ts` (the file fingerprint), and in the reader a `fraction` on `ReaderPosition` plus `ReaderHandle.goToFraction` (`ReaderCanvas.tsx`) to follow a text file. Touches `src/features/shell/ui.ts` (a `roomsOpen` panel flag), `useExclusiveSheets.ts`, `src/app/App.tsx` (rail item, panel, hash join, progress and document type feed), `src/app/commands.ts` ("Open rooms", "Leave room") and the e2e suite.
 
 ## 5. Left to the builder
 
@@ -84,7 +90,8 @@ Exact word lists and copy; timing constants within the limits above; how a late 
 2. Room size 8, to stay inside the free tier's 100 messages/second with several busy rooms.
 3. Codes of 6 characters, join by code or a hash link, always confirmed before joining.
 4. Random nicknames, not editable except a re-roll; no accounts.
-5. Progress shown as page / total (what the reader already shows), at most once per 10 seconds.
+5. Progress shown as page / total for PDFs and a percentage for text files (screenful pages differ between devices), at most once per 10 seconds.
+11. Same-document detection uses a 16-character fingerprint of size plus the first and last 64 KB, not a full-file hash, so it stays fast for large files. Titles are never shared and there is no title switch: the owner picked same-file detection only.
 6. Timer lengths 15 / 25 / 45 minutes; local countdown; no sound.
 7. Rooms vanish when empty; nothing is stored.
 8. Rooms are off when offline, with the reason shown.
