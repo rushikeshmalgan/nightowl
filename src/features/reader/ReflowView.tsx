@@ -3,6 +3,8 @@ import { TextView } from './TextView';
 
 /** Where a page's divider sits below the scroll container's top edge: clear of the 32px status line. */
 export const REFLOW_TOP_MARGIN = 40;
+/** A divider within this many pixels below the margin still counts as the current page (rounding, padding). */
+const PAGE_TOLERANCE = 12;
 
 export interface ReflowViewProps {
   doc: ReflowDoc;
@@ -55,7 +57,7 @@ export function reflowPageAt(scroller: HTMLElement): number {
   if (atEnd && tops.length > 0) return tops[tops.length - 1].page;
   let current = 1;
   for (const { page, top } of tops) {
-    if (top <= REFLOW_TOP_MARGIN) current = page;
+    if (top <= REFLOW_TOP_MARGIN + PAGE_TOLERANCE) current = page;
     else break;
   }
   return current;

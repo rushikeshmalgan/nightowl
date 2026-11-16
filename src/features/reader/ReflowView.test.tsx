@@ -60,6 +60,11 @@ describe('reflow scroll helpers', () => {
     expect(reflowPageAt(layout([-900, -400, REFLOW_TOP_MARGIN]))).toBe(3);
   });
 
+  it('counts a page whose divider sits a few pixels below the cut-off as the current one', () => {
+    expect(reflowPageAt(layout([-900, REFLOW_TOP_MARGIN + 8, 700]))).toBe(2);
+    expect(reflowPageAt(layout([-900, REFLOW_TOP_MARGIN + 40, 700]))).toBe(1);
+  });
+
   it('reports page 1 before the first divider reaches the top', () => {
     expect(reflowPageAt(layout([200, 900, 1600]))).toBe(1);
   });
