@@ -62,4 +62,68 @@ describe('useReadingProgress', () => {
     unmount();
     expect(lib.saveProgress).toHaveBeenCalledWith(expect.anything(), { docId: 'a', page: 2, scrollTop: 640 });
   });
+
+  it('keeps the chosen PDF mode and reflow position when the page position is saved', async () => {
+    lib.getProgress.mockResolvedValue({ docId: 'a', page: 4, scrollTop: 1200, pdfMode: 'reflow', reflowScrollTop: 800 });
+    const { result, unmount } = renderHook(() => useReadingProgress('a'));
+    await waitFor(() => expect(result.current.initial).not.toBeUndefined());
+    act(() => result.current.save(5, 1500));
+    unmount();
+    expect(lib.saveProgress).toHaveBeenCalledWith(expect.anything(), { docId: 'a', page: 5, scrollTop: 1500, pdfMode: 'reflow', reflowScrollTop: 800 });
+  });
+
+  it('saves a mode change without losing the last page position', async () => {
+    lib.getProgress.mockResolvedValue({ docId: 'a', page: 4, scrollTop: 1200 });
+    const { result, unmount } = renderHook(() => useReadingProgress('a'));
+    await waitFor(() => expect(result.current.initial).not.toBeUndefined());
+    act(() => result.current.update({ pdfMode: 'reflow' }));
+    unmount();
+    expect(lib.saveProgress).toHaveBeenCalledWith(expect.anything(), { docId: 'a', page: 4, scrollTop: 1200, pdfMode: 'reflow' });
+  });
+
+  it('saves the reflow position, starting from page 1 when nothing was saved', async () => {
+    const { result, unmount } = renderHook(() => useReadingProgress('a'));
+    await waitFor(() => expect(result.current.initial).toBeNull());
+    act(() => result.current.update({ reflowScrollTop: 640 }));
+    unmount();
+    expect(lib.saveProgress).toHaveBeenCalledWith(expect.anything(), { docId: 'a', page: 1, scrollTop: 0, reflowScrollTop: 640 });
+  });
+
+  it('records the current page from the reflow view without touching the Pages scroll offset', async () => {
+    lib.getProgress.mockResolvedValue({ docId: 'a', page: 4, scrollTop: 1200 });
+    const { result, unmount } = renderHook(() => useReadingProgress('a'));
+    await waitFor(() => expect(result.current.initial).not.toBeUndefined());
+    act(() => result.current.update({ page: 7, reflowScrollTop: 3000 }));
+    unmount();
+    expect(lib.saveProgress).toHaveBeenCalledWith(expect.anything(), { docId: 'a', page: 7, scrollTop: 1200, reflowScrollTop: 3000 });
+  });
+
+  it('never exposes the previous document record during the render where the document changes', async () => {
+    lib.getProgress.mockResolvedValueOnce({ docId: 'a', page: 4, scrollTop: 1200, pdfMode: 'reflow' });
+    const seen: Array<{ id: string; initial: unknown }> = [];
+    const { result, rerender } = renderHook(
+      ({ id }) => {
+        const progress = useReadingProgress(id);
+        seen.push({ id, initial: progress.initial });
+        return progress;
+      },
+      { initialProps: { id: 'a' } },
+    );
+    await waitFor(() => expect(result.current.initial?.docId).toBe('a'));
+    lib.getProgress.mockReturnValueOnce(new Promise(() => {}));
+    rerender({ id: 'b' });
+    const forB = seen.filter((entry) => entry.id === 'b');
+    expect(forB.length).toBeGreaterThan(0);
+    for (const entry of forB) expect(entry.initial).toBeUndefined();
+  });
+
+  it('does not write pdf fields for a document that never set them', async () => {
+    const { result, unmount } = renderHook(() => useReadingProgress('a'));
+    await waitFor(() => expect(result.current.initial).toBeNull());
+    act(() => result.current.save(2, 640));
+    unmount();
+    const written = lib.saveProgress.mock.calls[0][1];
+    expect(Object.keys(written).sort()).toEqual(['docId', 'page', 'scrollTop']);
+  });
 });
+

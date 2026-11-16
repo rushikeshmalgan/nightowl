@@ -24,6 +24,7 @@ export interface UiPanels {
   tuningOpen: boolean;
   libraryOpen: boolean;
   audioOpen: boolean;
+  roomsOpen: boolean;
 }
 
 type BooleanKey = {
@@ -63,6 +64,7 @@ const DEFAULT_PANELS: UiPanels = {
   tuningOpen: false,
   libraryOpen: false,
   audioOpen: false,
+  roomsOpen: false,
 };
 
 function applyTheme(theme: ThemeId): void {

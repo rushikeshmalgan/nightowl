@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useUi } from './ui';
 
-const SHEETS = ['tuningOpen', 'libraryOpen', 'audioOpen'] as const;
+const SHEETS = ['tuningOpen', 'libraryOpen', 'audioOpen', 'roomsOpen'] as const;
 
 /** Close every sheet except `keep`. */
 function closeOthers(keep: (typeof SHEETS)[number]): void {
@@ -10,7 +10,7 @@ function closeOthers(keep: (typeof SHEETS)[number]): void {
 }
 
 /**
- * On a narrow screen the Tuning, Library and Audio panels are bottom sheets in
+ * On a narrow screen the Tuning, Library, Audio and Rooms panels are bottom sheets in
  * the same spot, so only one may be open: opening one closes the others. On a
  * wide screen they are side drawers and may be open together.
  */

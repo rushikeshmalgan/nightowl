@@ -33,6 +33,14 @@ describe('ui store', () => {
     expect(settingsOf(useUi.getState())).toEqual(DEFAULT_SETTINGS);
   });
 
+  it('has a rooms panel flag that starts closed and is closed by reset', () => {
+    expect(useUi.getState().roomsOpen).toBe(false);
+    useUi.getState().set('roomsOpen', true);
+    expect(useUi.getState().roomsOpen).toBe(true);
+    useUi.getState().reset();
+    expect(useUi.getState().roomsOpen).toBe(false);
+  });
+
   it('writes the theme to the document element', () => {
     useUi.getState().set('theme', 'sepia');
     expect(useUi.getState().theme).toBe('sepia');

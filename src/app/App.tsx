@@ -1,4 +1,4 @@
-import { Bookmark, ChevronsDown, Library, MessageSquare, Music, ScanLine, Search, SlidersHorizontal, Type, Volume2 } from 'lucide-react';
+import { Bookmark, ChevronsDown, Library, MessageSquare, Music, ScanLine, Search, SlidersHorizontal, Type, Users, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AudioPanel } from '../features/audio/AudioPanel';
 import { Chrome } from '../features/shell/Chrome';
@@ -14,7 +14,8 @@ import { SpotifyPlayer } from '../features/music/sources/SpotifyPlayer';
 import { YouTubeAudioPlayer } from '../features/music/sources/YouTubeAudioPlayer';
 import type { RailItem } from '../features/shell/Rail';
 import { ReaderCanvas } from '../features/reader/ReaderCanvas';
-import type { ReaderHandle, ReaderPosition } from '../features/reader/ReaderCanvas';
+import type { PdfView, ReaderHandle, ReaderPosition } from '../features/reader/ReaderCanvas';
+import { PdfModeSwitch } from '../features/reader/PdfModeSwitch';
 import { StatusLine } from '../features/shell/StatusLine';
 import { TuningPanel } from '../features/shell/TuningPanel';
 import { textStylingBlocks } from '../features/reader/textStyling';
@@ -34,6 +35,12 @@ import { useMusicPrefs } from '../features/music/useMusicPrefs';
 import { useMusicSource } from '../features/music/useMusicSource';
 import { useOnline } from '../features/shell/useOnline';
 import { usePresence } from '../features/presence/usePresence';
+import { fingerprintBlob } from '../features/rooms/fingerprint';
+import { RoomPanel } from '../features/rooms/RoomPanel';
+import { roomCodeFromHash } from '../features/rooms/roomCode';
+import { myJumpTarget, roomLocalFrom } from '../features/rooms/roomLocal';
+import type { JumpTarget } from '../features/rooms/roomModel';
+import { useRoom } from '../features/rooms/useRoom';
 import { usePrefsSync } from '../features/shell/usePrefsSync';
 import { useSleepTimer } from '../features/audio/useSleepTimer';
 import { useTts } from '../features/reader/useTts';
@@ -60,6 +67,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   const [doc, setDoc] = useState<DocRecord | null>(null);
   const [docText, setDocText] = useState('');
   const [position, setPosition] = useState<ReaderPosition | null>(null);
+  const [pdfView, setPdfView] = useState<PdfView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -196,7 +204,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   }, []);
 
   // Panels the reader is actively using should not fade out from under them.
-  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen || ui.audioOpen || feedbackOpen;
+  const panelOpen = ui.paletteOpen || ui.tuningOpen || ui.libraryOpen || ui.audioOpen || ui.roomsOpen || feedbackOpen;
   const { idle } = useIdleFade({ enabled: !panelOpen });
 
   const tuningOpenedByHover = useRef(false);
@@ -204,17 +212,81 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
   const canHover = useMediaQuery(FINE_HOVER_QUERY);
   const narrow = useMediaQuery(NARROW_QUERY);
   useExclusiveSheets(narrow);
-  const sheetOpen = ui.tuningOpen || ui.libraryOpen || ui.audioOpen;
+  const sheetOpen = ui.tuningOpen || ui.libraryOpen || ui.audioOpen || ui.roomsOpen;
   const closeSheets = () => {
     tuningOpenedByHover.current = false;
     ui.set('tuningOpen', false);
     ui.set('libraryOpen', false);
     ui.set('audioOpen', false);
+    ui.set('roomsOpen', false);
   };
+
+  // Reading rooms. The room is told the kind of document, its size and my place; the file's fingerprint
+  // is worked out only while in a room. A link such as #room=4F2K9X is offered, never joined silently.
+  const roomsOnline = presence.status === 'online';
+  const [inRoom, setInRoom] = useState(false);
+  const [fingerprint, setFingerprint] = useState<{ docId: string; value: string } | null>(null);
+  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(() => roomCodeFromHash(window.location.hash));
+  const [roomAttention, setRoomAttention] = useState(false);
+  const docKind = doc ? doc.type : null;
+  const room = useRoom(roomLocalFrom(docKind, position, fingerprint && doc && fingerprint.docId === doc.id ? fingerprint.value : ''));
+  const roomRef = useRef(room);
+  roomRef.current = room;
+  const roomJoined = room.phase === 'joined';
+  const openRooms = () => {
+    ui.set('libraryOpen', false);
+    ui.set('audioOpen', false);
+    setFeedbackOpen(false);
+    ui.set('roomsOpen', true);
+  };
+  const goToRoomTarget = (target: JumpTarget) => {
+    if (target.kind === 'page') readerRef.current?.goToPage(target.page);
+    else readerRef.current?.goToOffset(target.offset);
+  };
+
+  useEffect(() => setInRoom(room.phase !== 'idle'), [room.phase]);
+  useEffect(() => {
+    if (!inRoom || !doc || fingerprint?.docId === doc.id) return;
+    let cancelled = false;
+    void fingerprintBlob(doc.blob)
+      .then((value) => {
+        if (!cancelled) setFingerprint({ docId: doc.id, value });
+      })
+      .catch(() => {
+        // Without a fingerprint the room simply cannot tell this is the same document.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inRoom, doc, fingerprint]);
+  // A room link in the address bar is used once, then removed from it.
+  useEffect(() => {
+    if (roomCodeFromHash(window.location.hash)) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, []);
+  useEffect(() => {
+    if (pendingRoomCode && roomsOnline) openRooms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRoomCode, roomsOnline]);
+  // A nudge or a finished timer pulses the Rooms button until the panel is opened.
+  const seenNudges = useRef(0);
+  useEffect(() => {
+    if (room.nudges.length > seenNudges.current && !ui.roomsOpen) setRoomAttention(true);
+    seenNudges.current = room.nudges.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.nudges.length]);
+  useEffect(() => {
+    if (room.timerDone && !ui.roomsOpen) setRoomAttention(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.timerDone]);
+  useEffect(() => {
+    if (ui.roomsOpen) setRoomAttention(false);
+  }, [ui.roomsOpen]);
 
   // A PDF page is a canvas: bionic reading and the dyslexia font cannot act on it. The saved
   // settings are left alone, so they apply again on the next text document.
-  const stylingBlocks = textStylingBlocks(doc);
+  const reflowAvailable = pdfView !== null && pdfView.reflow !== 'empty' && pdfView.reflow !== 'error';
+  const pdfMode = pdfView?.mode ?? null;
+  const stylingBlocks = textStylingBlocks(doc, pdfMode ? { mode: pdfMode, reflowAvailable } : null);
   const bionicBlocked = stylingBlocks.bionic !== null;
   const dyslexicBlocked = stylingBlocks.dyslexic !== null;
 
@@ -245,13 +317,25 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
         sleep: { set: sleep.set },
         music: { select: (source) => void chooseMusic(source), toggle: () => void toggleMusic() },
         blocked: { bionic: bionicBlocked, dyslexic: dyslexicBlocked },
+        pdfView: pdfMode ? { mode: pdfMode, reflowAvailable, set: (mode) => readerRef.current?.setPdfMode(mode) } : undefined,
+        rooms: {
+          open: () => {
+            useUi.getState().set('libraryOpen', false);
+            useUi.getState().set('audioOpen', false);
+            setFeedbackOpen(false);
+            useUi.getState().set('roomsOpen', true);
+          },
+          leave: () => roomRef.current.leave(),
+          joined: roomJoined,
+        },
         openFeedback: () => {
           useUi.getState().set('libraryOpen', false);
           useUi.getState().set('audioOpen', false);
+          useUi.getState().set('roomsOpen', false);
           setFeedbackOpen(true);
         },
       }),
-    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic, bionicBlocked, dyslexicBlocked],
+    [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic, bionicBlocked, dyslexicBlocked, pdfMode, reflowAvailable, roomJoined],
   );
 
   // Typing a page number in the palette offers a jump to that page.
@@ -271,6 +355,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
         setConfirmClear(false);
         setFeedbackOpen(false);
         ui.set('audioOpen', false);
+        ui.set('roomsOpen', false);
         ui.toggle('libraryOpen');
       },
     },
@@ -283,7 +368,21 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       onClick: () => {
         setFeedbackOpen(false);
         ui.set('libraryOpen', false);
+        ui.set('roomsOpen', false);
         ui.toggle('audioOpen');
+      },
+    },
+    {
+      id: 'rooms',
+      label: 'Rooms',
+      icon: <Users {...ICON} />,
+      pressed: ui.roomsOpen,
+      pulse: roomAttention,
+      disabled: !roomsOnline && room.phase === 'idle',
+      disabledReason: 'Rooms need a connection',
+      onClick: () => {
+        if (ui.roomsOpen) ui.set('roomsOpen', false);
+        else openRooms();
       },
     },
     {
@@ -336,6 +435,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       onClick: () => {
         ui.set('libraryOpen', false);
         ui.set('audioOpen', false);
+        ui.set('roomsOpen', false);
         setFeedbackOpen((open) => !open);
       },
     },
@@ -371,6 +471,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
         onHighlight={(range) => void highlights.add(range)}
         onText={setDocText}
         onPosition={setPosition}
+        onPdfView={setPdfView}
         onOpenLibrary={() => ui.set('libraryOpen', true)}
       />
 
@@ -384,6 +485,7 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
               {position.page} / {position.numPages}
             </span>
           ) : null}
+          {doc && pdfView ? <PdfModeSwitch mode={pdfView.mode} reflow={pdfView.reflow} onChange={(mode) => readerRef.current?.setPdfMode(mode)} /> : null}
           {doc ? (
             <button
               type="button"
@@ -457,6 +559,18 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
 
         {feedbackOpen ? (
           <FeedbackPanel accessKey={import.meta.env.VITE_FEEDBACK_KEY?.trim() || undefined} online={online} onClose={() => setFeedbackOpen(false)} />
+        ) : null}
+
+        {ui.roomsOpen ? (
+          <RoomPanel
+            room={room}
+            online={roomsOnline}
+            me={myJumpTarget(docKind, position)}
+            onGoTo={goToRoomTarget}
+            pendingCode={roomsOnline ? pendingRoomCode : null}
+            onPendingHandled={() => setPendingRoomCode(null)}
+            onClose={() => ui.set('roomsOpen', false)}
+          />
         ) : null}
 
         {/* Hovering the right edge slides the tuning panel out (mouse only). */}

@@ -16,6 +16,7 @@ function makeHandle(numPages = 5, size: (scale: number) => { width: number; heig
     getPageSize: vi.fn(async (_n: number, scale: number) => size(scale)),
     renderPage: vi.fn(async () => {}),
     renderTextLayer: vi.fn(async () => {}),
+    getPageText: vi.fn(async () => []),
     destroy: vi.fn(),
   };
 }

@@ -10,7 +10,9 @@ import type { ReaderHandle } from './ReaderCanvas';
 const progress = vi.hoisted(() => ({
   initial: null as ProgressRecord | null | undefined,
   save: vi.fn(),
+  update: vi.fn(),
 }));
+const reflowHook = vi.hoisted(() => ({ state: { status: 'idle' } as import('./useReflowText').ReflowState, calls: [] as unknown[][] }));
 const stubs = vi.hoisted(() => ({
   pdfProps: null as unknown,
   psdProps: null as unknown,
@@ -21,7 +23,14 @@ vi.mock('./text', () => ({
   readText: vi.fn(async (blob: Blob) => (blob as unknown as { __text: string }).__text),
 }));
 vi.mock('./useReadingProgress', () => ({
-  useReadingProgress: () => ({ initial: progress.initial, save: progress.save }),
+  useReadingProgress: () => ({ initial: progress.initial, save: progress.save, update: progress.update }),
+}));
+vi.mock('./useReflowText', () => ({
+  REFLOW_READ_ERROR: "This PDF's text could not be read.",
+  useReflowText: (...args: unknown[]) => {
+    reflowHook.calls.push(args);
+    return reflowHook.state;
+  },
 }));
 // The real viewers need pdf.js and a canvas; routing is what is under test here.
 vi.mock('../pdf/PdfViewer', () => ({
@@ -55,6 +64,9 @@ function binaryDoc(id: string, name: string, type: 'pdf' | 'psd'): DocRecord {
 beforeEach(() => {
   progress.initial = null;
   progress.save.mockReset();
+  progress.update.mockReset();
+  reflowHook.state = { status: 'idle' };
+  reflowHook.calls = [];
   stubs.pdfProps = null;
   stubs.psdProps = null;
   stubs.goToPage.mockReset();
@@ -199,5 +211,271 @@ describe('ReaderCanvas routing', () => {
     };
     render(<ReaderCanvas doc={doc} />);
     expect(await screen.findByRole('alert')).toHaveTextContent('This document could not be read from storage.');
+  });
+});
+
+describe('ReaderCanvas exact text positions', () => {
+  afterEach(() => {
+    delete (Range.prototype as unknown as { getBoundingClientRect?: unknown }).getBoundingClientRect;
+  });
+
+  /** Lays the text out in lines of 3 characters, 20px tall from the top: the cut-off (y=40) falls on the third line, offset 6. */
+  const layOutLines = () => {
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: Range) {
+        const article = document.querySelector('article')!;
+        const before = document.createRange();
+        before.selectNodeContents(article);
+        before.setEnd(this.startContainer, this.startOffset);
+        const top = Math.floor(before.toString().length / 3) * 20;
+        return { top, bottom: top + 20, height: 20, width: 8 };
+      },
+    });
+  };
+
+  it('reports where the text is as a character offset, once the text has loaded and as it scrolls', async () => {
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
+    await screen.findByRole('article');
+    layOutLines();
+    fireEvent.scroll(screen.getByTestId('reader-scroll'));
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 6, length: 9 }));
+  });
+
+  it('reports the position as soon as a text document opens, before any scrolling', async () => {
+    layOutLines();
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
+    await screen.findByRole('article');
+    await waitFor(() => expect(onPosition).toHaveBeenCalledWith(expect.objectContaining({ offset: 6, length: 9 })));
+  });
+
+  it('measures the text once at once while scrolling, then at most every 120 ms, ending on the latest place', async () => {
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={textDoc('a', 'a.txt', 'long text')} onPosition={onPosition} />);
+    await screen.findByRole('article');
+    layOutLines();
+    const scroller = screen.getByTestId('reader-scroll');
+    const before = onPosition.mock.calls.length;
+    vi.useFakeTimers();
+    try {
+      fireEvent.scroll(scroller);
+      fireEvent.scroll(scroller);
+      fireEvent.scroll(scroller);
+      expect(onPosition.mock.calls.length).toBe(before + 1);
+      act(() => {
+        vi.advanceTimersByTime(119);
+      });
+      expect(onPosition.mock.calls.length).toBe(before + 1);
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(onPosition.mock.calls.length).toBe(before + 2);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onPosition.mock.calls.length).toBe(before + 2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a PDF position free of text fields', async () => {
+    const onPosition = vi.fn();
+    render(<ReaderCanvas doc={binaryDoc('p', 'paper.pdf', 'pdf')} onPosition={onPosition} />);
+    await screen.findByTestId('pdf-viewer-stub');
+    act(() => pdfProps().onProgress({ page: 2, numPages: 5, scrollTop: 300 }));
+    expect(onPosition).toHaveBeenLastCalledWith({ page: 2, numPages: 5 });
+  });
+
+  it('scrolls a character to just under the status line', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={textDoc('a', 'a.txt', 'long text')} />);
+    await screen.findByRole('article');
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 500 }) });
+    const scroller = screen.getByTestId('reader-scroll');
+    scroller.scrollTop = 200;
+    act(() => ref.current?.goToOffset(4));
+    expect(scroller.scrollTop).toBe(200 + 500 - 0 - 40);
+  });
+
+  it('does nothing for an offset outside the text', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={textDoc('a', 'a.txt', 'long text')} />);
+    await screen.findByRole('article');
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 500 }) });
+    const scroller = screen.getByTestId('reader-scroll');
+    scroller.scrollTop = 200;
+    act(() => ref.current?.goToOffset(9999));
+    act(() => ref.current?.goToOffset(-3));
+    expect(scroller.scrollTop).toBe(200);
+  });
+});
+
+describe('ReaderCanvas PDF reflow', () => {
+  const pdf = () => binaryDoc('p', 'paper.pdf', 'pdf');
+  const readyDoc = {
+    hasText: true,
+    pages: [
+      { page: 1, paragraphs: ['Night reading is calm.'] },
+      { page: 2, paragraphs: ['The lamp is warm.'] },
+    ],
+  };
+  const lastEnabled = () => reflowHook.calls[reflowHook.calls.length - 1]?.[2];
+
+  it('opens in Pages and extracts nothing until Reflow is chosen', async () => {
+    render(<ReaderCanvas doc={pdf()} />);
+    await screen.findByTestId('pdf-viewer-stub');
+    expect(lastEnabled()).toBe(false);
+  });
+
+  it('opens in Reflow when that is how the PDF was last read', async () => {
+    progress.initial = { docId: 'p', page: 2, scrollTop: 10, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'ready', doc: readyDoc };
+    render(<ReaderCanvas doc={pdf()} />);
+    expect(await screen.findByText('Night reading is calm.')).toBeInTheDocument();
+    expect(screen.queryByTestId('pdf-viewer-stub')).not.toBeInTheDocument();
+    expect(lastEnabled()).toBe(true);
+  });
+
+  it('switches to Reflow on request and remembers the choice', async () => {
+    const ref = createRef<ReaderHandle>();
+    const onPdfView = vi.fn();
+    render(<ReaderCanvas ref={ref} doc={pdf()} onPdfView={onPdfView} />);
+    await screen.findByTestId('pdf-viewer-stub');
+    expect(onPdfView).toHaveBeenLastCalledWith({ mode: 'pages', reflow: 'idle' });
+    reflowHook.state = { status: 'loading', done: 3, total: 12 };
+    act(() => ref.current?.setPdfMode('reflow'));
+    expect(progress.update).toHaveBeenCalledWith({ pdfMode: 'reflow' });
+    expect(screen.getByRole('status')).toHaveTextContent('Preparing text… 3 of 12 pages');
+    expect(onPdfView).toHaveBeenLastCalledWith({ mode: 'reflow', reflow: 'loading' });
+  });
+
+  it('shows the reflowed text with the reading settings applied', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'ready', doc: readyDoc };
+    act(() => {
+      useUi.getState().set('bionic', true);
+      useUi.getState().set('fontSize', 22);
+    });
+    render(<ReaderCanvas doc={pdf()} />);
+    const article = (await screen.findByRole('region', { name: 'Page 1' })).querySelector('article') as HTMLElement;
+    expect(article.style.fontSize).toBe('22px');
+    expect(article.querySelector('strong')).not.toBeNull();
+  });
+
+  it('hands the reflowed text to read-aloud, and clears it when leaving Reflow', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'ready', doc: readyDoc };
+    const onText = vi.fn();
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={pdf()} onText={onText} />);
+    await screen.findByText('Night reading is calm.');
+    expect(onText).toHaveBeenLastCalledWith('Night reading is calm.\n\nThe lamp is warm.');
+    act(() => ref.current?.setPdfMode('pages'));
+    await screen.findByTestId('pdf-viewer-stub');
+    expect(onText).toHaveBeenLastCalledWith('');
+  });
+
+  describe('positions', () => {
+    let rects: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      // Page sections sit 1000px apart; the scroller's own scroll offset moves them.
+      rects = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        const page = Number(this.dataset.page);
+        if (!page) return { top: 0 } as DOMRect;
+        const scroller = this.closest('[data-testid="reader-scroll"]') as HTMLElement;
+        return { top: (page - 1) * 1000 - scroller.scrollTop } as DOMRect;
+      });
+    });
+    afterEach(() => rects.mockRestore());
+
+    it('reports the page under the top edge and saves the reflow position', async () => {
+      progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow', reflowScrollTop: 0 };
+      reflowHook.state = { status: 'ready', doc: readyDoc };
+      const onPosition = vi.fn();
+      render(<ReaderCanvas doc={pdf()} onPosition={onPosition} />);
+      const scroller = await screen.findByTestId('reader-scroll');
+      scroller.scrollTop = 980;
+      fireEvent.scroll(scroller);
+      expect(onPosition).toHaveBeenLastCalledWith({ page: 2, numPages: 2 });
+      expect(progress.update).toHaveBeenLastCalledWith({ page: 2, reflowScrollTop: 980 });
+    });
+
+    it('restores the saved reflow position', async () => {
+      progress.initial = { docId: 'p', page: 2, scrollTop: 0, pdfMode: 'reflow', reflowScrollTop: 640 };
+      reflowHook.state = { status: 'ready', doc: readyDoc };
+      render(<ReaderCanvas doc={pdf()} />);
+      const scroller = await screen.findByTestId('reader-scroll');
+      await waitFor(() => expect(scroller.scrollTop).toBe(640));
+    });
+
+    it('keeps the page when switching from Pages to Reflow', async () => {
+      const ref = createRef<ReaderHandle>();
+      render(<ReaderCanvas ref={ref} doc={pdf()} />);
+      await screen.findByTestId('pdf-viewer-stub');
+      act(() => pdfProps().onProgress({ page: 2, numPages: 2, scrollTop: 900 }));
+      reflowHook.state = { status: 'ready', doc: readyDoc };
+      act(() => ref.current?.setPdfMode('reflow'));
+      const scroller = await screen.findByTestId('reader-scroll');
+      await waitFor(() => expect(scroller.scrollTop).toBe(1000 - 40));
+    });
+
+    it('keeps the page when switching from Reflow back to Pages', async () => {
+      progress.initial = { docId: 'p', page: 1, scrollTop: 500, pdfMode: 'reflow', reflowScrollTop: 0 };
+      reflowHook.state = { status: 'ready', doc: readyDoc };
+      const ref = createRef<ReaderHandle>();
+      render(<ReaderCanvas ref={ref} doc={pdf()} />);
+      const scroller = await screen.findByTestId('reader-scroll');
+      scroller.scrollTop = 980;
+      fireEvent.scroll(scroller);
+      act(() => ref.current?.setPdfMode('pages'));
+      await screen.findByTestId('pdf-viewer-stub');
+      expect(pdfProps().initialPage).toBe(2);
+      expect(pdfProps().initialScrollTop).toBe(0);
+    });
+  });
+
+  it('falls back to Pages when the PDF has no text, and says Reflow is unavailable', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'empty' };
+    const onPdfView = vi.fn();
+    render(<ReaderCanvas doc={pdf()} onPdfView={onPdfView} />);
+    expect(await screen.findByTestId('pdf-viewer-stub')).toBeInTheDocument();
+    await waitFor(() => expect(progress.update).toHaveBeenCalledWith({ pdfMode: 'pages' }));
+    expect(onPdfView).toHaveBeenLastCalledWith({ mode: 'pages', reflow: 'empty' });
+  });
+
+  it('tells the reader on screen why a scanned PDF cannot be reflowed, and lets them dismiss it', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'empty' };
+    render(<ReaderCanvas doc={pdf()} />);
+    const notice = await screen.findByRole('alert');
+    expect(notice).toHaveTextContent('This PDF has no selectable text (it looks scanned), so it cannot be reflowed.');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('explains a failed text extraction the same way', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'error', message: "This PDF's text could not be read." };
+    render(<ReaderCanvas doc={pdf()} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent("This PDF's text could not be read.");
+  });
+
+  it('shows no notice when Reflow works', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow' };
+    reflowHook.state = { status: 'ready', doc: readyDoc };
+    render(<ReaderCanvas doc={pdf()} />);
+    await screen.findByText('Night reading is calm.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not offer a view switch for text documents', async () => {
+    const onPdfView = vi.fn();
+    render(<ReaderCanvas doc={textDoc('t', 't.txt', 'hello')} onPdfView={onPdfView} />);
+    await screen.findByRole('article');
+    expect(onPdfView).toHaveBeenLastCalledWith(null);
   });
 });

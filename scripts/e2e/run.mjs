@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { createServer, loadEnv, preview } from 'vite';
-import { makePdf, makePsd, makeToneWav } from './fixtures.mjs';
+import { makeArticlePdf, makePdf, makePsd, makeScannedPdf, makeToneWav } from './fixtures.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = 5199;
@@ -79,7 +79,7 @@ async function libraryNames(page) {
 }
 
 /** A phone (375x667 unless told otherwise): touch input, mobile viewport, no hover. Fresh storage, so the seed library is present. */
-async function openMobile(env, size = { width: 375, height: 667 }) {
+async function openMobile(env, size = { width: 375, height: 667 }, hash = '') {
   const context = await env.browser.newContext({
     viewport: size,
     deviceScaleFactor: 2,
@@ -88,7 +88,7 @@ async function openMobile(env, size = { width: 375, height: 667 }) {
   });
   const page = await context.newPage();
   watch(page);
-  await page.goto(env.url, { timeout: 45000 });
+  await page.goto(env.url + hash, { timeout: 45000 });
   await page.waitForSelector('[data-testid="status-title"]');
   await page.waitForSelector('article');
   return { context, page };
@@ -564,7 +564,7 @@ const groups = {
         const bionic = page.getByRole('button', { name: 'Bionic reading', exact: true });
         expect(await bionic.isDisabled(), 'the Bionic button is still enabled on a PDF');
         const title = await bionic.getAttribute('title');
-        expect(title === 'Bionic reading is not available for PDF pages.', `title was ${title}`);
+        expect(title === 'Bionic reading works in Reflow mode. Switch this PDF to Reflow to use it.', `title was ${title}`);
         await page.keyboard.press('Control+b');
         await page.waitForTimeout(150);
         const flagged = (await page.getByTestId('status-title').locator('xpath=..').innerText()).includes('Bionic');
@@ -579,7 +579,7 @@ const groups = {
         const toggle = sheet.getByRole('button', { name: /Dyslexia-friendly font/ });
         await toggle.scrollIntoViewIfNeeded();
         expect(await toggle.isDisabled(), 'the dyslexia toggle is still enabled on a PDF');
-        const reason = sheet.getByText('The dyslexia-friendly font is not available for PDF pages.');
+        const reason = sheet.getByText('The dyslexia-friendly font works in Reflow mode. Switch this PDF to Reflow to use it.');
         await reason.scrollIntoViewIfNeeded();
         const box = await reason.boundingBox();
         expect(box !== null, 'the reason is not rendered');
@@ -747,8 +747,339 @@ const groups = {
         await shot(page, 'phone-feedback');
         await panel.getByRole('button', { name: 'Close feedback' }).tap();
       });
+      // Reflow: an article-like PDF (header, footer, hyphenated words) and a scan with no text.
+      const importPdf = async (name, buffer) => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles({ name, mimeType: 'application/pdf', buffer });
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        // The previous PDF's pages are still on screen until the new document opens.
+        await page.waitForFunction((n) => document.querySelector('[data-testid="status-title"]')?.textContent === n, name, { timeout: 15000 });
+        const close = library.getByRole('button', { name: 'Close panel' });
+        if (await close.isVisible().catch(() => false)) await close.tap();
+        await page.waitForTimeout(500);
+        await awake();
+      };
+      const openFromLibrary = async (name) => {
+        await awake();
+        await page.getByRole('button', { name: 'Library', exact: true }).tap();
+        await page.getByRole('region', { name: 'Library', exact: true }).getByRole('button', { name: `Open ${name}` }).tap();
+        await page.waitForTimeout(700);
+        await awake();
+      };
+      await check('phone', 'Reflow shows the PDF as readable text that fits the phone', async () => {
+        await importPdf('Annual Report.pdf', makeArticlePdf(3));
+        await page.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        await page.waitForSelector('[data-testid="reader-scroll"] article', { timeout: 15000 });
+        const m = await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="reader-scroll"]');
+          return {
+            scrollW: scroller.scrollWidth,
+            clientW: scroller.clientWidth,
+            font: getComputedStyle(scroller.querySelector('article')).fontSize,
+            text: scroller.innerText,
+          };
+        });
+        expect(m.scrollW <= m.clientW + 1, `reflow scrolls sideways (${m.scrollW} wide in ${m.clientW})`);
+        expect(m.font === '18px', `the text is ${m.font}, not 18px`);
+        expect(m.text.includes('Pattern recognition in the survey data was clear.'), 'the hyphenated word was not joined');
+        expect(!m.text.includes('Annual Report 2026'), 'the repeated page header is still in the text');
+        expect(!/Page \d of \d/.test(m.text), 'the repeated page footer is still in the text');
+        await shot(page, 'phone-reflow');
+      });
+      await check('phone', 'Bionic reading applies in Reflow', async () => {
+        await awake();
+        const bionic = page.getByRole('button', { name: 'Bionic reading', exact: true });
+        expect(await bionic.isEnabled(), 'Bionic is still disabled in Reflow');
+        await bionic.tap();
+        await page.waitForTimeout(300);
+        const strong = await page.locator('[data-testid="reader-scroll"] article strong').count();
+        expect(strong > 0, 'no bold word starts appeared');
+        await shot(page, 'phone-reflow-bionic');
+        await bionic.tap();
+      });
+      await check('phone', 'switching Reflow back to Pages keeps the page', async () => {
+        await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="reader-scroll"]');
+          const section = document.querySelector('section[data-page="3"]');
+          scroller.scrollTop += section.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 40;
+        });
+        await page.waitForTimeout(600);
+        await awake();
+        const before = await page.getByRole('status', { name: 'Document status' }).innerText();
+        expect(/3 \/ 3/.test(before), `the status line says "${before.replace(/\s+/g, ' ')}" in Reflow`);
+        await page.getByRole('button', { name: 'Switch to Pages' }).tap();
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await page.waitForTimeout(900);
+        // The last page is short, so the document ends before it can reach the top edge: it only has to be on screen.
+        const box = await page.evaluate(() => {
+          const r = document.querySelector('[data-testid="pdf-page"][data-page="3"]').getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, view: innerHeight };
+        });
+        expect(box.top < box.view - 150 && box.bottom > 150, `page 3 spans ${Math.round(box.top)}-${Math.round(box.bottom)}px in a ${box.view}px screen after switching back`);
+      });
+      await check('phone', 'a scanned PDF says it cannot be reflowed and stays on Pages', async () => {
+        await importPdf('Scan.pdf', makeScannedPdf(2));
+        await page.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        const notice = page.getByRole('alert');
+        await notice.waitFor({ timeout: 15000 });
+        const text = await notice.innerText();
+        expect(/scanned/.test(text), `the notice says "${text}"`);
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await awake();
+        expect(await page.getByRole('button', { name: 'Switch to Reflow' }).isDisabled(), 'the Reflow switch is still enabled');
+        await shot(page, 'phone-reflow-scanned');
+      });
+      await check('phone', 'each PDF remembers whether it was read in Reflow', async () => {
+        await openFromLibrary('Annual Report.pdf');
+        await page.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        await page.waitForSelector('[data-testid="reader-scroll"] article', { timeout: 15000 });
+        await page.waitForTimeout(900);
+        await openFromLibrary('Scan.pdf');
+        await openFromLibrary('Annual Report.pdf');
+        await page.waitForSelector('[data-testid="reader-scroll"] article', { timeout: 15000 });
+      });
+      await check('phone', 'tapping the reader count shows who is reading what, fully on screen', async () => {
+        await awake();
+        const online = await page
+          .waitForFunction(() => document.querySelector('[data-testid="presence"]')?.dataset.status === 'online', undefined, { timeout: 12000 })
+          .then(() => true, () => false);
+        if (!online) return 'skipped: presence did not connect in this run';
+        await page.getByTestId('presence').tap();
+        const group = page.getByRole('group', { name: 'Readers by document type' });
+        await group.waitFor();
+        const box = await group.boundingBox();
+        expect(box.x >= 0 && box.x + box.width <= 360.5 && box.y + box.height <= 800, `the breakdown spans ${Math.round(box.x)}-${Math.round(box.x + box.width)} by ${Math.round(box.y + box.height)}px`);
+        expect(/reading PDFs/.test(await group.innerText()), 'the breakdown does not list PDF readers');
+        await shot(page, 'phone-presence');
+        await page.getByTestId('presence').tap();
+      });
     } finally {
       await context.close();
+    }
+  },
+
+  /** Two people in one room, against the live connection: a desktop and a 360x800 phone. */
+  async rooms(_desktop, env) {
+    const connected = (p) =>
+      p
+        .waitForFunction(() => document.querySelector('[data-testid="presence"]')?.dataset.status === 'online', undefined, { timeout: 20000 })
+        .then(() => true, () => false);
+    const panel = (p) => p.locator('section[aria-label="Rooms"]');
+    const memberCount = (p) => p.evaluate(() => document.querySelectorAll('section[aria-label="Rooms"] ul > li').length);
+    const waitMembers = (p, n) =>
+      p.waitForFunction((count) => document.querySelectorAll('section[aria-label="Rooms"] ul > li').length === count, n, { timeout: 25000 });
+    const waitText = (p, text, timeout = 35000) => panel(p).getByText(text).first().waitFor({ timeout });
+    /** The character at the top of the reading area, measured from the text's own boxes (the app's method, repeated here). */
+    const topOffsetOf = (p) =>
+      p.evaluate(() => {
+        const scroller = document.querySelector('[data-testid="reader-scroll"]');
+        const article = scroller.querySelector('article');
+        const cutoff = scroller.getBoundingClientRect().top + 40;
+        const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        const starts = [];
+        let total = 0;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          nodes.push(node);
+          starts.push(total);
+          total += node.data.length;
+        }
+        const bottomAt = (offset) => {
+          let lo = 0;
+          let hi = nodes.length - 1;
+          while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            if (starts[mid] <= offset) lo = mid;
+            else hi = mid - 1;
+          }
+          const local = offset - starts[lo];
+          const range = document.createRange();
+          range.setStart(nodes[lo], local);
+          range.setEnd(nodes[lo], Math.min(nodes[lo].data.length, local + 1));
+          return range.getBoundingClientRect().bottom;
+        };
+        let lo = 0;
+        let hi = total - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (bottomAt(mid) > cutoff) hi = mid;
+          else lo = mid + 1;
+        }
+        return lo;
+      });
+    const pageBox = (p, n) =>
+      p.evaluate((page) => {
+        const r = document.querySelector(`[data-testid="pdf-page"][data-page="${page}"]`).getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, view: innerHeight };
+      }, n);
+    const articleBytes = makeArticlePdf(3);
+
+    const ctxA = await env.browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const A = await ctxA.newPage();
+    watch(A);
+    let ctxB = null;
+    let B = null;
+    try {
+      await A.goto(env.url, { timeout: 45000 });
+      await A.waitForSelector('article');
+      if (!(await connected(A))) {
+        await check('rooms', 'rooms need the live connection', async () => 'skipped: presence did not connect in this run');
+        return;
+      }
+
+      let code = '';
+      await check('rooms', 'a room is created and shows its code', async () => {
+        await wake(A);
+        await A.getByRole('button', { name: 'Rooms', exact: true }).click();
+        await panel(A).getByRole('button', { name: 'Create a room' }).click();
+        const shown = await panel(A).getByText(/^OWL-[A-HJKMNP-Z2-9]{6}$/).innerText();
+        code = shown.slice(4);
+        expect(/^[A-HJKMNP-Z2-9]{6}$/.test(code), `the code "${shown}" is not a room code`);
+        await shot(A, 'rooms-desktop-created');
+      });
+      if (!code) return;
+
+      await check('rooms', 'a phone opening the link is asked first, then joins; both see two people', async () => {
+        const phone = await openMobile(env, { width: 360, height: 800 }, `#room=${code}`);
+        ctxB = phone.context;
+        B = phone.page;
+        await B.getByText(`Join room OWL-${code}?`).waitFor({ timeout: 30000 });
+        const hash = await B.evaluate(() => location.hash);
+        expect(hash === '', `the link was left in the address bar: "${hash}"`);
+        await B.getByRole('button', { name: 'Join this room' }).tap();
+        await panel(B).getByText(`OWL-${code}`, { exact: true }).waitFor();
+        await waitMembers(A, 2);
+        await waitMembers(B, 2);
+        await shot(B, 'phone-room-joined');
+      });
+      if (!B) return;
+
+      await check('rooms', 'on the same long text file, the phone\'s place reaches the desktop, which lands on the same spot and can go Back', async () => {
+        const paragraph = (i) => `Paragraph ${i}. Night owls read quietly under warm light, one slow line after another, and nobody hurries. `.repeat(3);
+        const longText = Buffer.from(Array.from({ length: 300 }, (_, i) => paragraph(i)).join('\n\n'));
+        // Both people open the same long file, so there is plenty of text to scroll through on a desktop and on a phone.
+        await importFile(A, file('long.txt', longText, 'text/plain'));
+        await A.waitForFunction(() => document.querySelector('[data-testid="status-title"]')?.textContent === 'long.txt', undefined, { timeout: 20000 });
+        await wake(A);
+        await A.getByRole('button', { name: 'Rooms', exact: true }).click();
+        await B.touchscreen.tap(200, 100);
+        await B.getByRole('button', { name: 'Library', exact: true }).tap();
+        await B.getByRole('region', { name: 'Library', exact: true }).getByLabel('Add documents').setInputFiles({ name: 'long.txt', mimeType: 'text/plain', buffer: longText });
+        await B.waitForFunction(() => document.querySelector('[data-testid="status-title"]')?.textContent === 'long.txt', undefined, { timeout: 20000 });
+        const closeLibrary = B.getByRole('region', { name: 'Library', exact: true }).getByRole('button', { name: 'Close panel' });
+        if (await closeLibrary.isVisible().catch(() => false)) await closeLibrary.tap();
+        await B.touchscreen.tap(200, 300);
+        await B.getByRole('button', { name: 'Rooms', exact: true }).tap();
+        await waitText(A, 'same document as you');
+        await waitText(B, 'same document as you');
+        // The phone scrolls with its Rooms sheet and backdrop open: its reported place must still be the real one.
+        await B.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="reader-scroll"]');
+          scroller.scrollTop = Math.round((scroller.scrollHeight - scroller.clientHeight) * 0.6);
+        });
+        await A.waitForFunction(
+          () => [...document.querySelectorAll('section[aria-label="Rooms"] li button')].some((b) => /^Go to ([1-9]\d?|100)%$/.test((b.textContent ?? '').trim())),
+          undefined,
+          { timeout: 40000 },
+        );
+        const bOffset = await topOffsetOf(B);
+        const aBefore = await topOffsetOf(A);
+        expect(bOffset > 2000, `the phone is only ${bOffset} characters in`);
+        expect(Math.abs(aBefore - bOffset) > 2000, `the desktop was already near the phone (${aBefore} vs ${bOffset})`);
+        await panel(A).getByRole('button', { name: /^Go to \d+%$/ }).click();
+        await A.waitForTimeout(600);
+        const aAfter = await topOffsetOf(A);
+        expect(Math.abs(aAfter - bOffset) <= 160, `the desktop landed at character ${aAfter}, the phone is at ${bOffset}`);
+        await shot(A, 'rooms-desktop-jumped');
+        await panel(A).getByRole('button', { name: /^Back to \d+%$/ }).click();
+        await A.waitForTimeout(600);
+        const aBack = await topOffsetOf(A);
+        expect(Math.abs(aBack - aBefore) <= 160, `Back went to character ${aBack}, the desktop was at ${aBefore}`);
+      });
+
+      await check('rooms', 'with the same PDF, B sees A on page 3, goes there and comes back', async () => {
+        await importFile(A, file('article.pdf', articleBytes, 'application/pdf'));
+        await A.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        await wake(A);
+        await A.getByRole('button', { name: 'Rooms', exact: true }).click();
+        await B.touchscreen.tap(200, 100);
+        await B.getByRole('button', { name: 'Library', exact: true }).tap();
+        await B.getByRole('region', { name: 'Library', exact: true }).getByLabel('Add documents').setInputFiles({ name: 'article.pdf', mimeType: 'application/pdf', buffer: articleBytes });
+        await B.waitForFunction(() => document.querySelector('[data-testid="status-title"]')?.textContent === 'article.pdf', undefined, { timeout: 20000 });
+        await B.waitForSelector('[data-testid="pdf-page"]', { timeout: 15000 });
+        const close = B.getByRole('region', { name: 'Library', exact: true }).getByRole('button', { name: 'Close panel' });
+        if (await close.isVisible().catch(() => false)) await close.tap();
+        await B.touchscreen.tap(200, 300);
+        await B.getByRole('button', { name: 'Rooms', exact: true }).tap();
+        await waitText(A, 'same document as you');
+        await waitText(B, 'same document as you');
+        await A.evaluate(() => document.querySelector('[data-testid="pdf-page"][data-page="3"]').scrollIntoView());
+        await panel(B).getByRole('button', { name: 'Go to p. 3' }).waitFor({ timeout: 40000 });
+        const before = await pageBox(B, 3);
+        expect(before.top > before.view - 150, 'page 3 was already on screen before the jump');
+        await panel(B).getByRole('button', { name: 'Go to p. 3' }).tap();
+        await B.waitForTimeout(600);
+        const after = await pageBox(B, 3);
+        expect(after.top < after.view - 150, `page 3 is still at ${Math.round(after.top)}px after Go to`);
+        await shot(B, 'phone-room-pdf-jumped');
+        await panel(B).getByRole('button', { name: 'Back to p. 1' }).tap();
+        await B.waitForTimeout(600);
+        const back = await pageBox(B, 1);
+        expect(back.top > -60 && back.top < 300, `page 1 sits ${Math.round(back.top)}px from the top after Back`);
+      });
+
+      await check('rooms', 'a nudge pulses the closed Rooms button until it is opened', async () => {
+        await panel(B).getByRole('button', { name: 'Close panel' }).first().tap();
+        await A.getByRole('button', { name: 'Send 🔥' }).click();
+        await B.waitForFunction(() => document.querySelector('button[aria-label="Rooms"]')?.className.includes('animate-pulse'), undefined, { timeout: 15000 });
+        await B.touchscreen.tap(200, 300);
+        await B.getByRole('button', { name: 'Rooms', exact: true }).tap();
+        await panel(B).waitFor();
+        const pulsing = await B.evaluate(() => document.querySelector('button[aria-label="Rooms"]')?.className.includes('animate-pulse'));
+        expect(!pulsing, 'the button still pulses after the panel was opened');
+      });
+
+      await check('rooms', 'a focus timer started by A counts down on B', async () => {
+        await A.getByRole('button', { name: '15 min' }).click();
+        await panel(B).getByRole('timer').waitFor({ timeout: 15000 });
+        const left = await panel(B).getByRole('timer').innerText();
+        expect(/^1[45]:\d\d$/.test(left.trim()), `B's timer reads "${left}"`);
+        await A.getByRole('button', { name: 'Stop timer' }).click();
+      });
+
+      await check('rooms', 'on the phone the room fits inside 360px', async () => {
+        const fit = await B.evaluate(() => {
+          const box = (el) => {
+            const r = el.getBoundingClientRect();
+            return { left: r.left, right: r.right };
+          };
+          const sheet = box(document.querySelector('section[aria-label="Rooms"]'));
+          const rows = [...document.querySelectorAll('section[aria-label="Rooms"] ul > li')].map(box);
+          const buttons = [...document.querySelectorAll('section[aria-label="Rooms"] button')].map((b) => {
+            const r = b.getBoundingClientRect();
+            return { right: r.right, height: r.height, name: b.getAttribute('aria-label') || b.textContent?.trim() };
+          });
+          return { sheet, rows, buttons, scrollW: document.documentElement.scrollWidth };
+        });
+        expect(fit.scrollW <= 360, `the page is ${fit.scrollW}px wide`);
+        expect(fit.sheet.left >= -0.5 && fit.sheet.right <= 360.5, `the sheet spans ${Math.round(fit.sheet.left)}-${Math.round(fit.sheet.right)}`);
+        const outside = fit.rows.filter((r) => r.left < -0.5 || r.right > 360.5);
+        expect(outside.length === 0, `${outside.length} rows spill outside the screen`);
+        const small = fit.buttons.filter((b) => b.height > 0 && b.height < 43.5 && b.name !== 'Close panel');
+        expect(small.length === 0, `buttons under 44px: ${small.map((b) => `${b.name} ${Math.round(b.height)}`).join(', ')}`);
+        await shot(B, 'phone-room');
+      });
+
+      await check('rooms', 'when A leaves, B sees one person', async () => {
+        await A.getByRole('button', { name: 'Leave room' }).click();
+        await waitMembers(B, 1);
+        expect((await memberCount(B)) === 1, 'B still lists someone else');
+      });
+    } finally {
+      await ctxA.close();
+      if (ctxB) await ctxB.close();
     }
   },
 
@@ -829,9 +1160,9 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 800 
 const page = await context.newPage();
 // Never hang: give up if the whole run takes too long.
 const watchdog = setTimeout(() => {
-  console.log('FAIL  watchdog: the run exceeded 8 minutes');
+  console.log('FAIL  watchdog: the run exceeded 12 minutes');
   process.exit(2);
-}, 480000);
+}, 720000);
 const pageErrors = [];
 const consoleErrors = [];
 /** Collects uncaught errors, console errors and CSP violations from a page. */
