@@ -79,6 +79,11 @@ async function renderApp() {
 
 const openPalette = () => fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true });
 const box = () => screen.getByRole('combobox');
+/** Puts the whole query in at once: typed key by key, a pause on a slow machine would search a half-typed word. */
+const ask = async (user: ReturnType<typeof userEvent.setup>, query: string) => {
+  await user.click(box());
+  await user.paste(query);
+};
 const findRows = () => [...document.body.querySelectorAll('[cmdk-group-heading]')].filter((el) => el.textContent === 'Find');
 
 beforeEach(() => {
@@ -97,7 +102,7 @@ describe('App: searching the open document', () => {
     await renderApp();
     await waitFor(() => expect(screen.getByTestId('reader-stub')).toBeInTheDocument());
     openPalette();
-    await user.type(box(), 'night');
+    await ask(user, 'night');
     const rows = await screen.findAllByText(/The night was calm/);
     expect(rows).toHaveLength(2);
     expect(findRows()).toHaveLength(1);
@@ -112,7 +117,7 @@ describe('App: searching the open document', () => {
     open(makeTextDoc('notes.txt', NOTES));
     await renderApp();
     openPalette();
-    await user.type(box(), 'n');
+    await ask(user, 'n');
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(findRows()).toHaveLength(0);
   });
@@ -122,7 +127,7 @@ describe('App: searching the open document', () => {
     open(makeTextDoc('notes.txt', NOTES));
     await renderApp();
     openPalette();
-    await user.type(box(), 'zebra');
+    await ask(user, 'zebra');
     expect(await screen.findByText('No matches for "zebra" in this document.')).toBeInTheDocument();
   });
 
@@ -131,7 +136,7 @@ describe('App: searching the open document', () => {
     open(makeBinaryDoc('paper.pdf', 'pdf'));
     await renderApp();
     openPalette();
-    await user.type(box(), 'night');
+    await ask(user, 'night');
     const rows = await screen.findAllByText(/p\. \d/);
     expect(rows.map((el) => el.textContent)).toEqual(['p. 1', 'p. 2', 'p. 2']);
     await user.click(rows[1]);
@@ -144,7 +149,7 @@ describe('App: searching the open document', () => {
     open(makeBinaryDoc('paper.pdf', 'pdf'));
     await renderApp();
     openPalette();
-    await user.type(box(), 'night');
+    await ask(user, 'night');
     const rows = await screen.findAllByText(/p\. \d/);
     await user.click(rows[2]);
     await waitFor(() => expect(reader.goToMatch).toHaveBeenCalledWith({ kind: 'reflow', page: 2, offset: 14, length: 5 }));
@@ -156,7 +161,7 @@ describe('App: searching the open document', () => {
     open(makeBinaryDoc('scan.pdf', 'pdf'));
     await renderApp();
     openPalette();
-    await user.type(box(), 'night');
+    await ask(user, 'night');
     expect(await screen.findByText('This PDF has no text to search (it looks scanned).')).toBeInTheDocument();
   });
 
@@ -165,7 +170,7 @@ describe('App: searching the open document', () => {
     open(makeBinaryDoc('art.psd', 'psd'));
     await renderApp();
     openPalette();
-    await user.type(box(), 'night');
+    await ask(user, 'night');
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(findRows()).toHaveLength(0);
     expect(loadReflowText).not.toHaveBeenCalled();
@@ -176,7 +181,7 @@ describe('App: searching the open document', () => {
     const user = userEvent.setup();
     await renderApp();
     openPalette();
-    await user.type(box(), 'night');
+    await ask(user, 'night');
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(findRows()).toHaveLength(0);
   });
@@ -208,7 +213,7 @@ describe('App: the palette prompt and its start', () => {
     openPalette();
     await screen.findByRole('combobox');
     expect(loadReflowText).not.toHaveBeenCalled();
-    await user.type(box(), 'night');
+    await ask(user, 'night');
     await screen.findAllByText(/p\. \d/);
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
