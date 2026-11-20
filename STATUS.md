@@ -1,12 +1,19 @@
 # NightOwl Reader: build status
 
-Updated 2026-11-14. The rebuild is on `feat/nocturne-rebuild`; the mobile pass and its polish follow-up are on `feat/mobile-responsive` (branched from it, not pushed). `main` is untouched.
+Updated 2026-11-20. Everything described below is merged into `main` and is what runs at https://nightowl-mauve.vercel.app. Until a CI workflow is merged, every test and browser-check number in this file is self-reported from a local run, recorded when that work finished.
+
+| Pull request | Merged | What |
+| --- | --- | --- |
+| #1, #2 | 2026-11-11, 2026-11-12 | The rebuild of the prototype into this app (all 32 plan tasks) |
+| #3 | 2026-11-13 | The mobile pass (phases 1–4) and the mobile polish that followed it |
+| #4 | 2026-11-16 | The UI refresh: a paper theme, new design tokens, restyled panels |
+| #5 | 2026-11-16 | PDF Reflow, the tappable reader count and Reading rooms (three stacked branches in one PR) |
 
 - Spec: `docs/superpowers/specs/2026-11-11-nocturne-reader-design.md`
 - Plan (32 tasks): `docs/superpowers/plans/2026-11-11-nocturne-reader.md`
 - Method: one task at a time, tests first, one commit per task.
 
-## Done
+## Done (history; the numbers are the ones recorded when each phase finished)
 
 - **Phase 1, Tasks 1–8:** project scaffold, design tokens and themes, Scrubber slider, idle fade, hotkeys and command palette, text reader (bionic, focus ruler, read aloud, auto-scroll), app shell.
 - **Phase 2, Tasks 9–13:** IndexedDB schema, preferences, LRU eviction, library import/open/delete/usage, reading progress, bookmarks, library panel, drag-and-drop import, storage panel, saved settings, PWA (service worker, manifest, icons). Checked in a browser: imports survive a reload and the app starts and opens documents with the network off.
@@ -25,7 +32,7 @@ At the last commit: 531 unit tests pass, typecheck is clean, and `npm run e2e --
 
 **Final check:** 555 unit tests pass, typecheck and build are clean, and `npm run e2e -- --build` passes 34/34 browser checks against the production build with zero CSP violations and no page errors. Covered: real PDF/PSD files, refused corrupt files, idle fade, palette, offline reload, uploaded track playing offline, live Spotify and YouTube embeds, ambient audio, live presence.
 
-## Mobile pass, phases 1–4 (branch `feat/mobile-responsive`)
+## Mobile pass, phases 1–4 (PR #3)
 
 Spec: `docs/superpowers/specs/2026-11-13-mobile-responsive-design.md`. Plan: `docs/superpowers/plans/2026-11-13-mobile-responsive-phases-1-4.md` (6 tasks, one commit each, tests first).
 
@@ -36,7 +43,7 @@ Spec: `docs/superpowers/specs/2026-11-13-mobile-responsive-design.md`. Plan: `do
 
 **Verified:** 639 unit tests, typecheck and build clean, and `npm run e2e -- --build` passes 55/55 against the production build with zero CSP violations (the two console errors listed are from the offline test switching the network off). 19 of those checks run on an emulated 375×667 touch phone (no hover); screenshots of each sheet, the zoom control and the PDF states were read by eye.
 
-**Phases 5–6 not started:** PDF reflow mode, in-document search.
+**Phase 5 (PDF Reflow) was built afterwards, see below. Phase 6 (in-document search) is not built.**
 
 **Found, not fixed (out of scope):**
 
@@ -46,7 +53,7 @@ Spec: `docs/superpowers/specs/2026-11-13-mobile-responsive-design.md`. Plan: `do
 - A PSD ignores Bionic and the dyslexia font but its controls stay live; the spec gates PDFs only.
 - While a sheet is open on a phone, its backdrop covers the rail, so switching panels takes one extra tap.
 
-## Mobile polish (follow-up, same branch)
+## Mobile polish (follow-up, also in PR #3)
 
 Plan: `docs/superpowers/plans/2026-11-13-mobile-polish.md` (6 tasks). Prompted by screenshots from a 360×800 phone with a real PDF open.
 
@@ -59,9 +66,13 @@ Plan: `docs/superpowers/plans/2026-11-13-mobile-polish.md` (6 tasks). Prompted b
 
 **Still open:** a fitted letter page on a phone renders at about half size, so small print is readable only zoomed in, panning sideways; Reflow (phase 5) is the real fix. Saved PDF positions are pixel offsets, so reopening at a different width lands slightly off.
 
-## PDF Reflow, phase 5 (branch `feat/pdf-reflow`)
+## UI refresh (PR #4)
 
-Plan: `docs/superpowers/plans/2026-11-15-pdf-reflow.md` (8 tasks, one commit each, tests first). Built on top of the local UI-refresh commit (`feat/ui-refresh`, not pushed).
+Made in a separate session. A `paper` theme joins Night, Sepia, OLED and Crimson; the design tokens in `src/design/tokens.css` were reworked and the panels restyled; the reader count reads "N reading now" (the per-document breakdown was a tooltip, made tappable in PR #5). Two behaviours changed: the chrome layer forwards the mouse wheel to the reader when nothing under the pointer can scroll that way, and the side panels on desktop end above the music dock like the phone sheets. When it was committed, 665 unit tests passed and the typecheck was clean (checked before it went in); the browser suite's presence checks were updated for the new wording.
+
+## PDF Reflow, phase 5 (PR #5)
+
+Plan: `docs/superpowers/plans/2026-11-15-pdf-reflow.md` (8 tasks, one commit each, tests first). Merged in PR #5, built on top of the UI refresh (PR #4).
 
 - **Reflow view:** a Pages / Reflow button in the status line switches a PDF to one readable text column. PDFs open in Pages; each PDF remembers its view and its reflow position. Hyphenated words are joined, repeated headers, footers and page numbers are dropped, and a "Page N" divider (not part of the text) marks each page.
 - **Reading settings apply:** font size, line spacing, Bionic reading and the dyslexia font work in Reflow (still disabled in Pages, with the reason); read-aloud speaks the reflowed text; switching views keeps your page.
@@ -73,7 +84,7 @@ Plan: `docs/superpowers/plans/2026-11-15-pdf-reflow.md` (8 tasks, one commit eac
 
 **Known limits:** tables come out as plain lines; Pages mode reports page N-1 at the very end of a short last page (pre-existing).
 
-## Reading rooms (branch `feat/reading-rooms`, stacked on `feat/pdf-reflow`)
+## Reading rooms (PR #5)
 
 Spec: `docs/superpowers/specs/2026-11-16-reading-rooms-design.md`. Plan: `docs/superpowers/plans/2026-11-16-reading-rooms.md` (7 tasks, one commit each, tests first, plus one fix found on the way).
 
@@ -90,14 +101,16 @@ Spec: `docs/superpowers/specs/2026-11-16-reading-rooms-design.md`. Plan: `docs/s
 
 ## Next
 
-1. Review, then merge in order: `feat/ui-refresh`, `feat/pdf-reflow`, `feat/reading-rooms` (each is stacked on the one before).
-2. Phase 6: in-document search in the command palette.
-3. Optional: host `lofi.mp3`, `rain.mp3`, `pink.mp3` and set `VITE_AUDIO_CDN_BASE`; add Sufi or YouTube presets.
+1. **Review the open pull requests from the 2026-11-20 audit**, each separate and none merged automatically: the Reflow running-header fix with a real-PDF browser check, in-document search (phase 6 of the mobile design), a CI workflow, and this status fix.
+2. **Delete the merged remote branches** once the owner agrees: `feat/nocturne-rebuild`, `feat/mobile-responsive`, `feat/ui-refresh`, `feat/pdf-reflow-v2`, `feat/reading-rooms`, and the superseded `feat/pdf-reflow` (an earlier copy of three Reflow commits that were rebased into `feat/pdf-reflow-v2`; `git cherry` shows an equivalent of each on `main`).
+3. **Small follow-ups, any order:** make the Browse and Feedback panels real bottom sheets on a phone; stop showing Bionic reading and the dyslexia font as live on a PSD, where they do nothing; save a PDF's position as page plus spot (it is a pixel offset, so reopening at another width lands slightly off); Pages mode counts the page above when a short last page cannot scroll to the top; on a phone a sheet's backdrop covers the rail, so switching panels takes an extra tap.
+4. **Optional:** host `lofi.mp3`, `rain.mp3`, `pink.mp3` and set `VITE_AUDIO_CDN_BASE`; add Sufi or YouTube presets.
+
 
 ## Resuming
 
-- Run with `npm install`, then `npm run dev`. Tests: `npm test`. Browser checks: `npm run e2e` (uses the installed Edge or Chrome).
-- A local, git-ignored ledger of per-task results and decisions is at `.superpowers/sdd/2026-11-11-nocturne-reader/progress.md`. If it is missing, go by this file and `git log`.
+- Run with `npm install`, then `npm run dev`. Tests: `npm test`. Browser checks: `npm run e2e` (uses the installed Edge or Chrome, headless); `npm run e2e -- --build` runs the production build with its Content-Security-Policy, and `npm run e2e -- <group>` runs one group. The presence and rooms groups need the git-ignored `.env` with the Supabase keys, the suite starts a server on port 5199 (so it must be free), and it uses live Spotify and YouTube embeds, so it depends on the network.
+- Per-plan ledgers of results and decisions (git-ignored, so they exist only on the machine and worktree that ran the plan) are under `.superpowers/sdd/<plan-name>/progress.md`. If one is missing, go by this file, the plans and specs under `docs/superpowers/`, and `git log`.
 - Code is organised by feature under `src/features/` (see the README's Project layout). The plan and spec mention the older `src/components`, `src/hooks`, `src/lib` paths; those files now live in their feature folder.
 - Storage tests run in the node environment with `fake-indexeddb`; app-level tests use the in-memory fakes in `src/test/fakes.ts`.
-- Still needed from the owner: Supabase URL and anon key (Task 31); optional audio files and playlist links (Tasks 21, 24).
+- Environment: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (live reader count and rooms; without them the app runs in local mode and Rooms is disabled) and `VITE_FEEDBACK_KEY` (the feedback form) must be set in Vercel for production and for previews, and in `.env` locally; `VITE_AUDIO_CDN_BASE` is optional.
