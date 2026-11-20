@@ -1,0 +1,42 @@
+name: CI
+
+# Gates changes to main: unit tests, typecheck and the production build.
+# The browser (e2e) suite is NOT run here on purpose: it needs the owner's Supabase keys for the presence and
+# rooms groups and it loads live Spotify and YouTube embeds, so on a shared runner it would fail for reasons
+# that have nothing to do with the change. It is run locally with `npm run e2e -- --build`.
+on:
+  push:
+    branches: [main, ci/basic-workflow]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
