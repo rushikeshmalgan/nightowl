@@ -45,6 +45,8 @@ import { usePrefsSync } from '../features/shell/usePrefsSync';
 import { useSleepTimer } from '../features/audio/useSleepTimer';
 import { useTts } from '../features/reader/useTts';
 import { buildCommands, pageCommands } from './commands';
+import { searchCommands } from '../features/search/searchCommands';
+import { useDocumentSearch } from '../features/search/useDocumentSearch';
 import { db } from '../shared/db';
 import type { PlaylistItem, SourceId } from '../features/music/adapter';
 import { createDefaultAdapters } from '../features/music/defaultAdapters';
@@ -338,11 +340,23 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
     [tts.supported, tts.toggle, cache.documents, openDoc, requestClear, toggleNoise, audio.setTrack, sleep.set, chooseMusic, toggleMusic, bionicBlocked, dyslexicBlocked, pdfMode, reflowAvailable, roomJoined],
   );
 
+  // What is typed in the palette also searches the open document (a PDF through the extraction Reflow shares).
+  const [paletteQuery, setPaletteQuery] = useState('');
+  const docSearch = useDocumentSearch({ doc, text: docText, query: paletteQuery, active: ui.paletteOpen });
+  const findRows = useMemo(
+    () =>
+      doc
+        ? searchCommands(docSearch, { type: doc.type, mode: pdfMode, textLength: docText.length }, (target) => readerRef.current?.goToMatch(target))
+        : [],
+    [docSearch, doc, pdfMode, docText.length],
+  );
+  const searchable = doc !== null && doc.type !== 'psd';
+
   // Typing a page number in the palette offers a jump to that page.
   const numPages = position?.numPages ?? null;
   const dynamicCommands = useCallback(
-    (query: string) => pageCommands(query, numPages, (page) => readerRef.current?.goToPage(page)),
-    [numPages],
+    (query: string) => [...findRows, ...pageCommands(query, numPages, (page) => readerRef.current?.goToPage(page))],
+    [numPages, findRows],
   );
 
   const railItems: RailItem[] = [
@@ -616,7 +630,14 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       />
 
       <DropOverlay onFiles={(files) => void importFiles(files)} />
-      <CommandPalette open={ui.paletteOpen} onOpenChange={(open) => ui.set('paletteOpen', open)} commands={commands} dynamic={dynamicCommands} />
+      <CommandPalette
+        open={ui.paletteOpen}
+        onOpenChange={(open) => ui.set('paletteOpen', open)}
+        commands={commands}
+        dynamic={dynamicCommands}
+        onQueryChange={setPaletteQuery}
+        placeholder={searchable ? 'Find words, or type a command or page number' : undefined}
+      />
       <WarmthOverlay />
     </div>
   );
