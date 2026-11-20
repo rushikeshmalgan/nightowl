@@ -25,7 +25,7 @@ vi.mock('../features/reader/highlightStore', async () => (await import('../test/
 vi.mock('../features/pdf/reflowCache', () => ({ loadReflowText: vi.fn(), peekReflowText: vi.fn(() => null), clearReflowCache: vi.fn() }));
 
 /** The reader is a stand-in that reports its document the way the real one does and records the jump. */
-const reader = vi.hoisted(() => ({ goToMatch: vi.fn(), pdfMode: 'pages' as 'pages' | 'reflow' }));
+const reader = vi.hoisted(() => ({ goToMatch: vi.fn(), pdfMode: 'pages' as 'pages' | 'reflow', holdText: null as Promise<void> | null }));
 vi.mock('../features/reader/ReaderCanvas', async () => {
   const { useEffect, useImperativeHandle } = await import('react');
   const { readText } = await import('../features/reader/text');
@@ -40,8 +40,13 @@ vi.mock('../features/reader/ReaderCanvas', async () => {
       useImperativeHandle(props.ref, () => ({ goToMatch: reader.goToMatch, goToPage: vi.fn(), setPdfMode: vi.fn(), goToOffset: vi.fn(), goToHighlight: vi.fn() }));
       const { doc, onText, onPdfView, onPosition } = props;
       useEffect(() => {
-        if (doc?.type === 'text') void readText(doc.blob).then((text) => onText?.(text));
-        else onText?.('');
+        if (doc?.type === 'text') {
+          const hold = reader.holdText;
+          void readText(doc.blob).then(async (text) => {
+            if (hold) await hold;
+            onText?.(text);
+          });
+        } else onText?.('');
         onPdfView?.(doc?.type === 'pdf' ? { mode: reader.pdfMode, reflow: 'idle' } : null);
         onPosition?.({ page: 1, numPages: 5 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,6 +96,7 @@ beforeEach(() => {
   act(() => useUi.getState().reset());
   vi.clearAllMocks();
   reader.pdfMode = 'pages';
+  reader.holdText = null;
   vi.mocked(cache.peekReflowText).mockReturnValue(null);
   loadReflowText.mockResolvedValue(ready);
 });
@@ -184,6 +190,35 @@ describe('App: searching the open document', () => {
     await ask(user, 'night');
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(findRows()).toHaveLength(0);
+  });
+});
+
+describe('App: changing document', () => {
+  it('does not search the old text file for a newly opened one while its text is still loading', async () => {
+    const user = userEvent.setup();
+    open(makeTextDoc('alpha.txt', 'alpha night alpha night'));
+    state.docs.push(makeTextDoc('beta.txt', 'beta night here'));
+    await renderApp();
+    openPalette();
+    await ask(user, 'night');
+    expect(await screen.findAllByText(/alpha night/)).toHaveLength(2);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    let release: () => void = () => {};
+    reader.holdText = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open beta.txt' }));
+    openPalette();
+    await ask(user, 'night');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(screen.queryByText(/alpha night/)).not.toBeInTheDocument();
+    expect(findRows()).toHaveLength(0);
+
+    await act(async () => release());
+    expect(await screen.findByText(/beta night here/)).toBeInTheDocument();
   });
 });
 

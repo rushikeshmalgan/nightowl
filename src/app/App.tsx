@@ -140,6 +140,8 @@ export default function App({ adapters: injected }: { adapters?: DefaultAdapters
       }
       setNotice(null);
       setPosition(null);
+      // The reader reports the new text once it has loaded; until then there is none, not the old document's.
+      setDocText('');
       setDoc(record);
       return true;
     },

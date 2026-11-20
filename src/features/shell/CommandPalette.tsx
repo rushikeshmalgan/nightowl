@@ -28,7 +28,9 @@ const filter = (value: string, search: string, keywords?: string[]) =>
 export function CommandPalette({ open, onOpenChange, commands, dynamic, onQueryChange, placeholder = 'Type a command or a page number' }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const reportQuery = useRef(onQueryChange);
-  reportQuery.current = onQueryChange;
+  useEffect(() => {
+    reportQuery.current = onQueryChange;
+  });
 
   useEffect(() => {
     if (open) return;
