@@ -3,7 +3,7 @@ import type { PdfMode, ThemeId } from '../shared/types';
 import { AUDIO_TRACKS } from '../features/audio/tracks';
 import type { TrackId } from '../features/audio/tracks';
 
-export type CommandGroup = 'Document' | 'View' | 'Audio' | 'Music' | 'Storage';
+export type CommandGroup = 'Find' | 'Document' | 'View' | 'Audio' | 'Music' | 'Storage';
 
 export interface CommandDeps {
   ui: Pick<UiState, 'set' | 'toggle' | 'reset'>;
@@ -130,6 +130,12 @@ export interface Command {
   group: CommandGroup;
   hotkey?: string;
   keywords?: string[];
+  /** Small text on the right of the row, e.g. the page of a search match. */
+  hint?: string;
+  /** Shown whatever is typed and kept in the order given, instead of being filtered by the query (search results). */
+  fixed?: boolean;
+  /** Shown but cannot be chosen (a status line such as "Preparing search…"). */
+  disabled?: boolean;
   run(): void;
 }
 
