@@ -36,7 +36,7 @@ Spec: `docs/superpowers/specs/2026-11-13-mobile-responsive-design.md`. Plan: `do
 
 **Verified:** 639 unit tests, typecheck and build clean, and `npm run e2e -- --build` passes 55/55 against the production build with zero CSP violations (the two console errors listed are from the offline test switching the network off). 19 of those checks run on an emulated 375×667 touch phone (no hover); screenshots of each sheet, the zoom control and the PDF states were read by eye.
 
-**Phases 5–6 not started:** PDF reflow mode, in-document search.
+**Phases 5 and 6 were built afterwards:** PDF Reflow and in-document search (see their sections below).
 
 **Found, not fixed (out of scope):**
 
@@ -88,10 +88,22 @@ Spec: `docs/superpowers/specs/2026-11-16-reading-rooms-design.md`. Plan: `docs/s
 
 **Known limits:** same-document detection matches identical copies only (a re-saved PDF will not match); the ninth-member rule is unit-tested but not exercised in a browser; Pages mode still counts the page above when a short last page cannot scroll to the top (pre-existing).
 
+## Document search, phase 6 (branch `feat/document-search`)
+
+Spec: `docs/superpowers/specs/2026-11-13-mobile-responsive-design.md` (section 2 "Search", section 3 phase 6). Plan: `docs/superpowers/plans/2026-11-20-document-search.md` (7 tasks, one commit each, tests first, plus one polish commit).
+
+- **What it does:** open the command palette (Ctrl K, or the search button on the rail), type two or more characters, and the palette lists up to 20 matches under a "Find" heading. Each row is a snippet (about 40 characters either side, cut at word boundaries) with its place on the right: `p. 12` for a PDF, `62%` for a text file. Enter or a tap jumps there. Typing a page number still offers "Go to page N".
+- **Where it jumps:** a PDF in Pages turns to the page (the page, not the word: a page there is a picture). A PDF in Reflow, and a text file, scroll the match to just under the status line and select it, so it is visible and can be highlighted or copied.
+- **One extraction, not two:** the per-page text Reflow reads now lives in a shared cache (`src/features/pdf/reflowCache.ts`). Search and Reflow share one extraction of a document and neither reads it twice. Nothing is read until a valid query is typed; closing the palette lets go of it unless Reflow is also waiting on it.
+- **Matching:** case-insensitive and literal (a typed `(` or `.*` means itself), and a space matches any whitespace, so a phrase is found across a line or paragraph break. Queries run 2 to 100 characters; the first 20 are listed and the count stops at 500 ("500+").
+- **Honest states:** "Preparing search… 3 of 12 pages" while a PDF is read, "No matches for "q" in this document.", "This PDF has no text to search (it looks scanned).", and a failed-read message. A PSD offers no search.
+- **Verified:** 969 unit tests, typecheck and build clean, and `npm run e2e -- --build` passes against the production build with zero CSP violations: the new `search` group 9/9 and every other group as before (77/77). The `search` group prints a real 6-page PDF with the browser itself and checks, on a desktop and a 360×800 phone, the hits and their pages, a jump in Pages, a jump in Reflow (the words selected, near the top), a long text file (a phrase jumps to it and is selected, a common word lists 20 and says "500+"), no-match and scanned-PDF messages, and that the palette fits the phone. Screenshots were read; they led to cutting snippets at word boundaries.
+- **Known limits:** no OCR, so a scanned PDF cannot be searched; Pages mode lands on the page, not the word; a match on the last Reflow page cannot scroll to the top (a short last page cannot, the same as the page counter limit above); closing the palette part-way through reading a PDF throws that progress away (reopening starts again, unless Reflow was reading it too); there is no next/previous bar, each search is a fresh palette query; the selection that marks a match clears on the next click.
+
 ## Next
 
 1. Review, then merge in order: `feat/ui-refresh`, `feat/pdf-reflow`, `feat/reading-rooms` (each is stacked on the one before).
-2. Phase 6: in-document search in the command palette.
+2. Review phase 6 (in-document search, branch `feat/document-search`) before merging; it is built.
 3. Optional: host `lofi.mp3`, `rain.mp3`, `pink.mp3` and set `VITE_AUDIO_CDN_BASE`; add Sufi or YouTube presets.
 
 ## Resuming

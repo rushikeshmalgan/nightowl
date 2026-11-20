@@ -6,9 +6,10 @@
 // Starts its own Vite dev server and drives the Edge or Chrome already
 // installed on this machine (no browser download). Exits non-zero on failure.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { makeLongText, printNotesPdf } from './searchFixtures.mjs';
 import { chromium } from 'playwright-core';
 import { createServer, loadEnv, preview } from 'vite';
 import { makeArticlePdf, makePdf, makePsd, makeScannedPdf, makeToneWav } from './fixtures.mjs';
@@ -1144,6 +1145,207 @@ const groups = {
       await page.keyboard.press('a');
       await panel.getByRole('button', { name: 'Play' }).waitFor();
     });
+  },
+
+  /** In-document search from the command palette: a real printed PDF in Pages and Reflow, a long text file, a scanned PDF, and a phone. */
+  async search(_desktop, env) {
+    const notes = await printNotesPdf(env.browser);
+    mkdirSync(SHOTS, { recursive: true });
+    writeFileSync(join(SHOTS, 'search-notes.pdf'), notes);
+
+    /** What is selected and how far below the top of the reading area it sits. */
+    const selection = (page, scroller) =>
+      page.evaluate((selector) => {
+        const sel = window.getSelection();
+        const top = sel && sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect().top : null;
+        const area = document.querySelector(selector)?.getBoundingClientRect().top ?? 0;
+        return { text: sel ? sel.toString() : '', below: top === null ? null : top - area };
+      }, scroller);
+    /** The desktop Library is a side panel, closed from its rail button. */
+    const closeLibrary = async (page) => {
+      await wake(page);
+      if (await page.getByRole('region', { name: 'Library', exact: true }).isVisible().catch(() => false)) {
+        await page.getByRole('button', { name: 'Library', exact: true }).click();
+        await page.getByRole('region', { name: 'Library', exact: true }).waitFor({ state: 'hidden' });
+      }
+    };
+    const rows = (page) => page.getByRole('option');
+    /** The Reflow page the selection is in. */
+    const inPage = (page) =>
+      page.evaluate(() => window.getSelection()?.anchorNode?.parentElement?.closest('section[data-page]')?.dataset.page);
+    /** Opens the palette from the keyboard and types a query. */
+    const ask = async (page, query) => {
+      await wake(page);
+      await page.keyboard.press('Control+k');
+      await page.getByRole('combobox').fill(query);
+    };
+    /** Waits for a hit row whose hint is e.g. "p. 4". */
+    const hit = (page, hint) => page.getByRole('option').filter({ hasText: hint });
+
+    // --- desktop ------------------------------------------------------------
+    const desktop = await env.browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await desktop.newPage();
+    watch(page);
+    try {
+      await page.goto(env.url, { timeout: 45000 });
+      await page.waitForSelector('[data-testid="status-title"]');
+      await page.waitForSelector('article');
+
+      await check('search', 'a text file: a phrase jumps to it with the words selected, near the top', async () => {
+        await importFile(page, file('long.txt', makeLongText(), 'text/plain'));
+        await page.waitForFunction(() => document.querySelector('[data-testid="status-title"]')?.textContent === 'long.txt', undefined, { timeout: 20000 });
+        await closeLibrary(page);
+        await ask(page, 'paragraph 250');
+        const row = rows(page).filter({ hasText: /^.*Paragraph 250/ });
+        await row.first().waitFor();
+        expect((await row.count()) === 1, `${await row.count()} rows for a phrase that occurs once`);
+        const hint = await row.first().locator('span').last().innerText();
+        expect(/^\d+%$/.test(hint), `the hint reads "${hint}"`);
+        await shot(page, 'search-desktop-text-results');
+        await row.first().click();
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        const got = await selection(page, '[data-testid="reader-scroll"]');
+        expect(got.text.toLowerCase() === 'paragraph 250', `selected "${got.text}"`);
+        expect(got.below !== null && got.below >= 30 && got.below <= 70, `the match sits ${got.below}px below the top of the reading area`);
+        await shot(page, 'search-desktop-text-jump');
+      });
+
+      await check('search', 'a common word lists 20 matches and says how many there are', async () => {
+        await ask(page, 'the');
+        await rows(page).first().waitFor();
+        await page.getByText(/^Showing the first 20 of 500\+ matches\.$/).waitFor();
+        const hits = await rows(page).filter({ hasText: /\d+%$/ }).count();
+        expect(hits === 20, `${hits} hit rows`);
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+      });
+
+      await check('search', 'a word that is not there says so', async () => {
+        await ask(page, 'zzqqxx');
+        await page.getByText('No matches for "zzqqxx" in this document.').waitFor();
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+      });
+
+      await check('search', 'a PDF in Pages: matches list in page order and choosing one turns to that page', async () => {
+        await importFile(page, file('notes.pdf', notes, 'application/pdf'));
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 20000 });
+        await closeLibrary(page);
+        await ask(page, 'lantern');
+        await hit(page, 'p. 6').waitFor({ timeout: 20000 });
+        const hints = await rows(page).evaluateAll((els) => els.map((el) => el.querySelector('span:last-child')?.textContent ?? ''));
+        expect(JSON.stringify(hints.filter((h) => /^p\. \d+$/.test(h))) === JSON.stringify(['p. 2', 'p. 4', 'p. 6']), `hints ${JSON.stringify(hints)}`);
+        await shot(page, 'search-desktop-pdf-results');
+        await hit(page, 'p. 4').click();
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => {
+          const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+          const target = document.querySelector('[data-testid="pdf-page"][data-page="4"]');
+          return Math.abs(target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) < 100;
+        });
+        await shot(page, 'search-desktop-pdf-jump');
+      });
+
+      await check('search', 'the same PDF in Reflow: choosing a match scrolls to it and selects it', async () => {
+        await wake(page);
+        await page.getByRole('button', { name: 'Switch to Reflow' }).click();
+        await page.waitForSelector('section[data-page]', { timeout: 20000 });
+        await ask(page, 'lantern');
+        await hit(page, 'p. 2').waitFor();
+        await hit(page, 'p. 2').click();
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        const got = await selection(page, '[data-testid="reader-scroll"]');
+        expect(got.text.toLowerCase() === 'lantern', `selected "${got.text}"`);
+        expect(got.below !== null && got.below >= 30 && got.below <= 70, `the match sits ${got.below}px below the top of the reading area`);
+        expect((await inPage(page)) === '2', `the selection is in page ${await inPage(page)}`);
+        await shot(page, 'search-desktop-reflow-jump');
+        // The last page cannot scroll up to the top, but the match must still be selected and on screen.
+        await ask(page, 'lantern');
+        await hit(page, 'p. 6').click();
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        const last = await selection(page, '[data-testid="reader-scroll"]');
+        expect(last.text.toLowerCase() === 'lantern', `on the last page selected "${last.text}"`);
+        expect(last.below !== null && last.below > 0 && last.below < 760, `the last-page match is ${last.below}px below the top`);
+        expect((await inPage(page)) === '6', `the selection is in page ${await inPage(page)}`);
+      });
+
+      await check('search', 'typing a page number still offers the page jump', async () => {
+        await ask(page, '3');
+        await page.getByRole('option', { name: 'Go to page 3' }).waitFor();
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+      });
+
+      await check('search', 'a scanned PDF says it has no text to search', async () => {
+        await importFile(page, file('scan.pdf', makeScannedPdf(2), 'application/pdf'));
+        await page.waitForFunction(() => document.querySelector('[data-testid="status-title"]')?.textContent === 'scan.pdf', undefined, { timeout: 20000 });
+        await closeLibrary(page);
+        await ask(page, 'night');
+        await page.getByText('This PDF has no text to search (it looks scanned).').waitFor({ timeout: 20000 });
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+      });
+    } finally {
+      await desktop.close();
+    }
+
+    // --- phone --------------------------------------------------------------
+    const { context, page: phone } = await openMobile(env, { width: 360, height: 800 });
+    try {
+      const awake = async () => {
+        await phone.touchscreen.tap(200, 300);
+        await phone.waitForFunction(() => document.querySelector('[data-testid="chrome"]')?.dataset.idle === 'false');
+      };
+      const openPalette = async () => {
+        await awake();
+        await phone.getByRole('button', { name: 'Command palette' }).tap();
+        await phone.getByRole('combobox').waitFor();
+      };
+      await check('search', 'phone: results fit the screen and choosing a match turns to its page', async () => {
+        await awake();
+        await phone.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = phone.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles(file('notes.pdf', notes, 'application/pdf'));
+        await phone.waitForSelector('[data-testid="pdf-page"]', { timeout: 20000 });
+        await library.getByRole('button', { name: 'Close panel' }).tap();
+        await openPalette();
+        await phone.getByRole('combobox').fill('lantern');
+        await hit(phone, 'p. 6').waitFor({ timeout: 20000 });
+        const fit = await phone.evaluate(() => {
+          const dialog = document.querySelector('[role="dialog"]').getBoundingClientRect();
+          const list = document.querySelector('[cmdk-list]');
+          return { left: dialog.left, right: dialog.right, scrollW: list.scrollWidth, clientW: list.clientWidth, page: document.documentElement.scrollWidth };
+        });
+        expect(fit.left >= 0 && fit.right <= 360.5, `the palette spans ${Math.round(fit.left)}-${Math.round(fit.right)} on a 360px screen`);
+        expect(fit.scrollW <= fit.clientW + 1, `the results scroll sideways (${fit.scrollW} wide in ${fit.clientW})`);
+        expect(fit.page <= 361, `the page is ${fit.page}px wide`);
+        await shot(phone, 'search-phone-results');
+        await hit(phone, 'p. 4').tap();
+        await phone.getByRole('dialog').waitFor({ state: 'hidden' });
+        await phone.waitForFunction(() => {
+          const scroller = document.querySelector('[data-testid="pdf-scroll"]');
+          const target = document.querySelector('[data-testid="pdf-page"][data-page="4"]');
+          return Math.abs(target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) < 100;
+        });
+      });
+      await check('search', 'phone: in Reflow, choosing a match scrolls to it and selects it', async () => {
+        await awake();
+        await phone.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        await phone.waitForSelector('section[data-page]', { timeout: 20000 });
+        await openPalette();
+        await phone.getByRole('combobox').fill('lantern');
+        await hit(phone, 'p. 2').waitFor();
+        await hit(phone, 'p. 2').tap();
+        await phone.getByRole('dialog').waitFor({ state: 'hidden' });
+        const got = await selection(phone, '[data-testid="reader-scroll"]');
+        expect(got.text.toLowerCase() === 'lantern', `selected "${got.text}"`);
+        expect((await inPage(phone)) === '2', `the selection is in page ${await inPage(phone)}`);
+        expect(got.below !== null && got.below >= 30 && got.below <= 70, `the match sits ${got.below}px below the top of the reading area`);
+        await shot(phone, 'search-phone-reflow-jump');
+      });
+    } finally {
+      await context.close();
+    }
   },
 };
 
