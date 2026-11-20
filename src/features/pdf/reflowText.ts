@@ -95,6 +95,11 @@ function toParagraphs(lines: Line[]): string[] {
   return paragraphs;
 }
 
+/** A page's paragraphs as the one text Reflow renders: separated by a blank line. Search offsets index into this. */
+export function pageText(paragraphs: string[]): string {
+  return paragraphs.join('\n\n');
+}
+
 /** The paragraphs of a single page. */
 export function assemblePage(items: PdfTextItem[]): string[] {
   return toParagraphs(toLines(items));

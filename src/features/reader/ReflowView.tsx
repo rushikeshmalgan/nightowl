@@ -1,3 +1,4 @@
+import { pageText } from '../pdf/reflowText';
 import type { ReflowDoc } from '../pdf/reflowText';
 import { TextView } from './TextView';
 
@@ -29,7 +30,7 @@ export function ReflowView({ doc, bionic, dyslexic, fontSize, lineHeight }: Refl
             <span aria-hidden="true" className="h-px flex-1 bg-line" />
           </div>
           {paragraphs.length > 0 ? (
-            <TextView text={paragraphs.join('\n\n')} mono={false} bionic={bionic} dyslexic={dyslexic} fontSize={fontSize} lineHeight={lineHeight} />
+            <TextView text={pageText(paragraphs)}mono={false} bionic={bionic} dyslexic={dyslexic} fontSize={fontSize} lineHeight={lineHeight} />
           ) : (
             <p className="mx-auto max-w-[72ch] text-sm text-muted">No text on this page.</p>
           )}
