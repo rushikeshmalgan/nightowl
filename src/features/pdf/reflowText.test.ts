@@ -61,6 +61,46 @@ describe('buildReflow', () => {
     expect(doc.hasText).toBe(true);
   });
 
+  // Browsers (Chromium's print-to-PDF) draw the running header and footer AFTER the body; word processors draw them first.
+  // Each page has its own sentence: lines that differ only by a digit would count as repeated, as a page number does.
+  const BODIES = ['Revenue grew steadily.', 'Costs fell again.', 'Outlook is calm.', 'Margins held firm.'];
+  const browserOrder = (n: number, body: string[]) => [...lines(body, 700), ...lines(['Annual Report 2026'], 760), ...lines([`Page ${n} of 4`], 40)];
+
+  it('drops a running header and footer even when they are drawn after the body', () => {
+    const doc = buildReflow([1, 2, 3, 4].map((n) => browserOrder(n, [BODIES[n - 1]])));
+    expect(doc.pages.map((p) => p.paragraphs)).toEqual(BODIES.map((body) => [body]));
+  });
+
+  it('finds a header drawn in the middle of the stream by where it sits on the page', () => {
+    const page = (n: number) => [...lines(['First body line.', 'Second body line.'], 700), ...lines(['Annual Report 2026'], 760), ...lines([`Body tail ${n}.`], 650)];
+    const doc = buildReflow([1, 2, 3].map(page));
+    for (const p of doc.pages) expect(p.paragraphs.join(' ')).not.toContain('Annual Report 2026');
+  });
+
+  it('drops a two-line header and a footer with its page number', () => {
+    const page = (n: number) => [
+      ...lines([BODIES[n - 1]], 700),
+      ...lines(['Annual Report 2026'], 770),
+      ...lines(['Confidential draft'], 758),
+      ...lines(['Acme Corp'], 50),
+      ...lines([`Page ${n} of 3`], 38),
+    ];
+    const doc = buildReflow([1, 2, 3].map(page));
+    expect(doc.pages.map((p) => p.paragraphs)).toEqual(BODIES.slice(0, 3).map((body) => [body]));
+  });
+
+  it('keeps a line that repeats on every page but sits in the middle of the text', () => {
+    const page = (n: number) => [...lines(['Body 1.', 'Body 2.', 'Body 3.', 'Body 4.', 'Continued', 'Body 6.', 'Body 7.', 'Body 8.', `Tail ${n}.`], 700, 20)];
+    const doc = buildReflow([1, 2, 3].map(page));
+    for (const p of doc.pages) expect(p.paragraphs.join(' ')).toContain('Continued');
+  });
+
+  it('drops a header repeated on both pages of a two-page document', () => {
+    const page = (n: number) => [...lines([BODIES[n - 1]], 700), ...lines(['Annual Report 2026'], 760)];
+    const doc = buildReflow([1, 2].map(page));
+    expect(doc.pages.map((p) => p.paragraphs)).toEqual([[BODIES[0]], [BODIES[1]]]);
+  });
+
   it('drops a bare page number even in a short document', () => {
     const doc = buildReflow([[...lines(['Only page text.']), ...lines(['7'], 60)]]);
     expect(doc.pages[0].paragraphs).toEqual(['Only page text.']);

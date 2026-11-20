@@ -2,21 +2,25 @@
 //
 //   node scripts/e2e/run.mjs            run every check
 //   node scripts/e2e/run.mjs pdf psd    run only the named groups
+//   node scripts/e2e/run.mjs --url=https://nightowl-mauve.vercel.app reflow
+//                                       run the named groups against a deployed site (starts no server)
 //
 // Starts its own Vite dev server and drives the Edge or Chrome already
 // installed on this machine (no browser download). Exits non-zero on failure.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { createServer, loadEnv, preview } from 'vite';
-import { makeArticlePdf, makePdf, makePsd, makeScannedPdf, makeToneWav } from './fixtures.mjs';
+import { makeArticlePdf, makePdf, makePsd, makeScannedPdf, makeToneWav, printReportPdf } from './fixtures.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = 5199;
 // --build runs against the production build (with its Content-Security-Policy).
 const useBuild = process.argv.includes('--build');
+// --url=<site> drives an already deployed site instead of starting a server.
+const urlArg = process.argv.find((arg) => arg.startsWith('--url='))?.slice('--url='.length);
 const wanted = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 const results = [];
 
@@ -1083,6 +1087,126 @@ const groups = {
     }
   },
 
+  /**
+   * A REAL PDF, printed by the browser (embedded fonts, a running header, a "Page N of M" footer drawn after the
+   * body, a word hyphenated across a line break), opened in Reflow. The synthetic fixtures elsewhere draw their
+   * header first; a real browser draws it last, which once left the header in the text.
+   */
+  async reflow(_desktop, env) {
+    const pdf = await printReportPdf(env.browser);
+    mkdirSync(SHOTS, { recursive: true });
+    writeFileSync(join(SHOTS, 'real-report.pdf'), pdf);
+    const readerText = (p) => p.locator('[data-testid="reader-scroll"]').innerText();
+    const expectCleanReflow = (text) => {
+      expect(!text.includes('Annual Report 2026'), 'the running header is still in the text');
+      expect(!/Page \d+ of \d+/.test(text), 'a "Page N of M" footer is still in the text');
+      expect(!text.includes('recog-'), 'the hyphenated word was left split');
+      expect(text.includes('and the pattern recognition work behind it took the whole team a month.'), 'the hyphenated word was not rejoined');
+    };
+
+    const context = await env.browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    watch(page);
+    try {
+      await page.goto(env.url, { timeout: 45000 });
+      await page.waitForSelector('article');
+
+      await check('reflow', 'a real printed PDF opens in Pages and offers the Reflow switch', async () => {
+        await importFile(page, file('report.pdf', pdf, 'application/pdf'));
+        await page.waitForFunction(() => document.querySelector('[data-testid="status-title"]')?.textContent === 'report.pdf', undefined, { timeout: 20000 });
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 20000 });
+        await wake(page);
+        // The desktop Library drawer stays open after an import: close it so the screenshots show the document.
+        if (await page.getByRole('region', { name: 'Library', exact: true }).isVisible().catch(() => false)) {
+          await page.getByRole('button', { name: 'Library', exact: true }).click();
+        }
+        const pages = await page.getByTestId('pdf-page').count();
+        expect(pages >= 4, `the report has only ${pages} pages`);
+        await page.getByRole('button', { name: 'Switch to Reflow' }).waitFor();
+        await shot(page, 'reflow-real-pages');
+      });
+
+      await check('reflow', 'Reflow drops the running header and footer on every page and rejoins the hyphenated word', async () => {
+        await wake(page);
+        await page.getByRole('button', { name: 'Switch to Reflow' }).click();
+        await page.waitForSelector('[data-testid="reader-scroll"] section[data-page]', { timeout: 30000 });
+        const sections = await page.locator('[data-testid="reader-scroll"] section[data-page]').count();
+        const text = await readerText(page);
+        expect(sections >= 4, `only ${sections} page sections`);
+        expectCleanReflow(text);
+        expect(text.includes('Quarterly Review: Reading Habits'), 'the title is missing');
+        expect(text.includes('Section 9: Quarterly outlook'), 'the last section is missing');
+        await shot(page, 'reflow-real-text');
+      });
+
+      await check('reflow', 'switching back to Pages keeps the page that was being read', async () => {
+        await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="reader-scroll"]');
+          const section = document.querySelector('section[data-page="3"]');
+          scroller.scrollTop += section.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 40;
+        });
+        await page.waitForTimeout(600);
+        await wake(page);
+        const before = (await page.getByRole('status', { name: 'Document status' }).innerText()).replace(/\s+/g, ' ');
+        expect(/3 \/ 4/.test(before), `the status line says "${before}" in Reflow`);
+        await page.getByRole('button', { name: 'Switch to Pages' }).click();
+        await page.waitForSelector('[data-testid="pdf-page"]', { timeout: 20000 });
+        await page.waitForTimeout(1000);
+        const top = await page.evaluate(
+          () => document.querySelector('[data-testid="pdf-page"][data-page="3"]').getBoundingClientRect().top - document.querySelector('[data-testid="pdf-scroll"]').getBoundingClientRect().top,
+        );
+        expect(top > -60 && top < 200, `page 3 sits ${Math.round(top)}px from the top after switching back`);
+        await shot(page, 'reflow-real-back-to-pages');
+      });
+
+      await check('reflow', 'the PDF reopens in Reflow after a reload', async () => {
+        await wake(page);
+        await page.getByRole('button', { name: 'Switch to Reflow' }).click();
+        await page.waitForSelector('[data-testid="reader-scroll"] section[data-page]', { timeout: 30000 });
+        await page.waitForTimeout(1200);
+        await page.reload();
+        await page.waitForSelector('[data-testid="status-title"]');
+        await page.waitForSelector('[data-testid="reader-scroll"] section[data-page]', { timeout: 30000 });
+        const title = await page.getByTestId('status-title').innerText();
+        expect(title === 'report.pdf', `the app reopened "${title}"`);
+        expectCleanReflow(await readerText(page));
+      });
+    } finally {
+      await context.close();
+    }
+
+    const phone = await openMobile(env, { width: 360, height: 800 });
+    try {
+      await check('reflow', 'on a 360px phone the real PDF reflows to a readable column with no sideways scroll', async () => {
+        const tap = async () => {
+          await phone.page.touchscreen.tap(200, 300);
+          await phone.page.waitForFunction(() => document.querySelector('[data-testid="chrome"]')?.dataset.idle === 'false');
+        };
+        await tap();
+        await phone.page.getByRole('button', { name: 'Library', exact: true }).tap();
+        const library = phone.page.getByRole('region', { name: 'Library', exact: true });
+        await library.getByLabel('Add documents').setInputFiles({ name: 'report.pdf', mimeType: 'application/pdf', buffer: pdf });
+        await phone.page.waitForFunction(() => document.querySelector('[data-testid="status-title"]')?.textContent === 'report.pdf', undefined, { timeout: 20000 });
+        await phone.page.waitForSelector('[data-testid="pdf-page"]', { timeout: 20000 });
+        const close = library.getByRole('button', { name: 'Close panel' });
+        if (await close.isVisible().catch(() => false)) await close.tap();
+        await tap();
+        await phone.page.getByRole('button', { name: 'Switch to Reflow' }).tap();
+        await phone.page.waitForSelector('[data-testid="reader-scroll"] section[data-page]', { timeout: 30000 });
+        const m = await phone.page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="reader-scroll"]');
+          return { scrollW: scroller.scrollWidth, clientW: scroller.clientWidth, font: getComputedStyle(scroller.querySelector('article')).fontSize, text: scroller.innerText };
+        });
+        expect(m.scrollW <= m.clientW + 1, `reflow scrolls sideways (${m.scrollW} wide in ${m.clientW})`);
+        expect(m.font === '18px', `the text is ${m.font}, not 18px`);
+        expectCleanReflow(m.text);
+        await shot(phone.page, 'phone-reflow-real');
+      });
+    } finally {
+      await phone.context.close();
+    }
+  },
+
   async audio(page) {
     const panel = page.getByRole('region', { name: 'Ambient sound' });
     const level = () => panel.getByTestId('led').evaluate((el) => Number(el.dataset.level));
@@ -1150,10 +1274,12 @@ const groups = {
 // --- run -------------------------------------------------------------------
 
 spawnSync(process.execPath, [join(root, 'scripts', 'copy-pdf-assets.mjs')], { stdio: 'ignore' });
-const server = useBuild
-  ? await preview({ root, logLevel: 'error', preview: { port: PORT, strictPort: true } })
-  : await createServer({ root, logLevel: 'error', server: { port: PORT, strictPort: true } });
-if (!useBuild) await server.listen();
+const server = urlArg
+  ? { close: async () => {} }
+  : useBuild
+    ? await preview({ root, logLevel: 'error', preview: { port: PORT, strictPort: true } })
+    : await createServer({ root, logLevel: 'error', server: { port: PORT, strictPort: true } });
+if (!urlArg && !useBuild) await server.listen();
 const cspViolations = [];
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1175,7 +1301,7 @@ function watch(target) {
   });
 }
 watch(page);
-const env = { browser, url: `http://localhost:${PORT}/` };
+const env = { browser, url: urlArg ? (urlArg.endsWith('/') ? urlArg : `${urlArg}/`) : `http://localhost:${PORT}/` };
 
 try {
   await page.goto(env.url, { timeout: 45000 });

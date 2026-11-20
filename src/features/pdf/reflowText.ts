@@ -104,26 +104,35 @@ const PAGE_NUMBER = /^(page\s*)?\d+(\s*(of|\/)\s*\d+)?$/i;
 /** Lines that differ only in their numbers count as the same header or footer. */
 const edgeKey = (text: string) => text.toLowerCase().replace(/\d+/g, '#');
 
+/** How many lines at the top and at the bottom of a page can be a running header or footer. */
+const EDGE_LINES = 3;
+
+/**
+ * The lines nearest the top and the bottom of the page, found by where they sit and not by the order they
+ * were drawn in: a word processor draws a header first, but a browser's print-to-PDF draws the header and
+ * footer after the whole body.
+ */
+function edgeLines(lines: Line[]): Set<Line> {
+  const byHeight = [...lines].sort((a, b) => b.y - a.y);
+  return new Set([...byHeight.slice(0, EDGE_LINES), ...byHeight.slice(-EDGE_LINES)]);
+}
+
 /**
  * Assembles every page, dropping bare page numbers and the header or footer
  * lines that repeat at the top or bottom of most pages.
  */
 export function buildReflow(pages: PdfTextItem[][]): ReflowDoc {
   const pageLines = pages.map(toLines);
+  const edges = pageLines.map(edgeLines);
   const counts = new Map<string, number>();
-  for (const lines of pageLines) {
-    const edges = new Set([lines[0], lines[lines.length - 1]].filter(Boolean).map((line) => edgeKey(line.text)));
-    for (const key of edges) counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
+  pageLines.forEach((_, index) => {
+    for (const key of new Set([...edges[index]].map((line) => edgeKey(line.text)))) counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
   const repeatAt = Math.max(2, Math.ceil(pages.length * 0.5));
-  const isEdgeNoise = (line: Line) =>
-    PAGE_NUMBER.test(line.text) || (pages.length >= 3 && (counts.get(edgeKey(line.text)) ?? 0) >= repeatAt);
+  const isEdgeNoise = (line: Line) => PAGE_NUMBER.test(line.text) || (pages.length >= 2 && (counts.get(edgeKey(line.text)) ?? 0) >= repeatAt);
 
   const result = pageLines.map((lines, index) => {
-    const kept = [...lines];
-    // A header and a page number can stack, so look at up to two lines at each end.
-    for (let i = 0; i < 2 && kept.length > 0 && isEdgeNoise(kept[0]); i++) kept.shift();
-    for (let i = 0; i < 2 && kept.length > 0 && isEdgeNoise(kept[kept.length - 1]); i++) kept.pop();
+    const kept = lines.filter((line) => !(edges[index].has(line) && isEdgeNoise(line)));
     return { page: index + 1, paragraphs: toParagraphs(kept) };
   });
   return { pages: result, hasText: result.some((page) => page.paragraphs.length > 0) };
