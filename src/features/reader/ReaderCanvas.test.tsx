@@ -479,3 +479,90 @@ describe('ReaderCanvas PDF reflow', () => {
     expect(onPdfView).toHaveBeenLastCalledWith(null);
   });
 });
+
+describe('ReaderCanvas jump to a search match', () => {
+  const pdf = () => binaryDoc('p', 'paper.pdf', 'pdf');
+  const readyDoc = {
+    hasText: true,
+    pages: [
+      { page: 1, paragraphs: ['Night reading is calm.'] },
+      { page: 2, paragraphs: ['The lamp is warm.'] },
+    ],
+  };
+  const boxAt = (top: number) =>
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => ({ top, bottom: top + 20, height: 20, width: 8 }) });
+  const selected = () => window.getSelection()?.toString();
+
+  afterEach(() => {
+    delete (Range.prototype as unknown as { getBoundingClientRect?: unknown }).getBoundingClientRect;
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it('turns to the page for a page target', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={pdf()} />);
+    await screen.findByTestId('pdf-viewer-stub');
+    act(() => ref.current?.goToMatch({ kind: 'page', page: 4 }));
+    expect(stubs.goToPage).toHaveBeenLastCalledWith(4);
+  });
+
+  it('scrolls a text match to just under the status line and selects it', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={textDoc('a', 'a.txt', 'a long text to search')} />);
+    await screen.findByRole('article');
+    boxAt(500);
+    const scroller = screen.getByTestId('reader-scroll');
+    scroller.scrollTop = 200;
+    act(() => ref.current?.goToMatch({ kind: 'text', offset: 7, length: 4 }));
+    expect(scroller.scrollTop).toBe(200 + 500 - 0 - 40);
+    expect(selected()).toBe('text');
+  });
+
+  it('does nothing for a text match outside the text', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={textDoc('a', 'a.txt', 'a long text')} />);
+    await screen.findByRole('article');
+    boxAt(500);
+    const scroller = screen.getByTestId('reader-scroll');
+    scroller.scrollTop = 200;
+    act(() => ref.current?.goToMatch({ kind: 'text', offset: 9999, length: 4 }));
+    act(() => ref.current?.goToMatch({ kind: 'text', offset: 9, length: 4 }));
+    expect(scroller.scrollTop).toBe(200);
+    expect(selected()).toBe('');
+  });
+
+  it('scrolls a reflow match on its page to just under the status line and selects it', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow', reflowScrollTop: 0 };
+    reflowHook.state = { status: 'ready', doc: readyDoc };
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={pdf()} />);
+    const scroller = await screen.findByTestId('reader-scroll');
+    boxAt(500);
+    scroller.scrollTop = 100;
+    act(() => ref.current?.goToMatch({ kind: 'reflow', page: 2, offset: 4, length: 4 }));
+    expect(scroller.scrollTop).toBe(100 + 500 - 0 - 40);
+    expect(selected()).toBe('lamp');
+  });
+
+  it('does nothing for a reflow match on a page that is not there', async () => {
+    progress.initial = { docId: 'p', page: 1, scrollTop: 0, pdfMode: 'reflow', reflowScrollTop: 0 };
+    reflowHook.state = { status: 'ready', doc: readyDoc };
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={pdf()} />);
+    const scroller = await screen.findByTestId('reader-scroll');
+    boxAt(500);
+    scroller.scrollTop = 100;
+    act(() => ref.current?.goToMatch({ kind: 'reflow', page: 9, offset: 0, length: 3 }));
+    act(() => ref.current?.goToMatch({ kind: 'reflow', page: 2, offset: 15, length: 9 }));
+    expect(scroller.scrollTop).toBe(100);
+    expect(selected()).toBe('');
+  });
+
+  it('turns to the page instead when Reflow is not showing', async () => {
+    const ref = createRef<ReaderHandle>();
+    render(<ReaderCanvas ref={ref} doc={pdf()} />);
+    await screen.findByTestId('pdf-viewer-stub');
+    act(() => ref.current?.goToMatch({ kind: 'reflow', page: 3, offset: 4, length: 4 }));
+    expect(stubs.goToPage).toHaveBeenLastCalledWith(3);
+  });
+});

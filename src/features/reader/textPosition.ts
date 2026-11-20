@@ -27,6 +27,19 @@ function indexText(root: HTMLElement): TextIndex {
   return { nodes, starts, total };
 }
 
+/** The text node holding the character at `offset` (which must be inside the text) and its place in that node. */
+function locate(index: TextIndex, offset: number): { node: Text; local: number } {
+  // The last node that starts at or before the offset.
+  let low = 0;
+  let high = index.nodes.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if (index.starts[mid] <= offset) low = mid;
+    else high = mid - 1;
+  }
+  return { node: index.nodes[low], local: offset - index.starts[low] };
+}
+
 /** The range of the character at `offset`, or an empty range at the very end. */
 function rangeIn(index: TextIndex, offset: number): Range | null {
   if (!Number.isFinite(offset) || offset < 0 || offset > index.total) return null;
@@ -38,17 +51,9 @@ function rangeIn(index: TextIndex, offset: number): Range | null {
     range.collapse(true);
     return range;
   }
-  // The last node that starts at or before the offset.
-  let low = 0;
-  let high = index.nodes.length - 1;
-  while (low < high) {
-    const mid = (low + high + 1) >> 1;
-    if (index.starts[mid] <= offset) low = mid;
-    else high = mid - 1;
-  }
-  const local = offset - index.starts[low];
-  range.setStart(index.nodes[low], local);
-  range.setEnd(index.nodes[low], local + 1);
+  const { node, local } = locate(index, offset);
+  range.setStart(node, local);
+  range.setEnd(node, local + 1);
   return range;
 }
 
@@ -72,6 +77,28 @@ function rectIn(index: TextIndex, offset: number): DOMRect | null {
  */
 export function rangeAtOffset(root: HTMLElement, offset: number): Range | null {
   return rangeIn(indexText(root), offset);
+}
+
+/**
+ * Selects `length` characters from `offset` in the text rendered under `root`, counting across all the
+ * markup, replacing the current selection. False (and the selection untouched) when that range is not
+ * wholly inside the text.
+ */
+export function selectText(root: HTMLElement, offset: number, length: number): boolean {
+  if (!Number.isFinite(offset) || !Number.isFinite(length)) return false;
+  const first = Math.floor(offset);
+  const count = Math.floor(length);
+  const index = indexText(root);
+  const selection = window.getSelection();
+  if (!selection || first < 0 || count < 1 || first + count > index.total) return false;
+  const start = locate(index, first);
+  const end = locate(index, first + count - 1);
+  const range = document.createRange();
+  range.setStart(start.node, start.local);
+  range.setEnd(end.node, end.local + 1);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
 }
 
 /** Where a character is on screen, or null when it is outside the text or cannot be measured. */

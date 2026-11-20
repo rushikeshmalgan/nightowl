@@ -1,4 +1,4 @@
-import { TEXT_TOP_MARGIN, rangeAtOffset, rectAtOffset, topOffset } from './textPosition';
+import { TEXT_TOP_MARGIN, rangeAtOffset, rectAtOffset, selectText, topOffset } from './textPosition';
 
 /** A reading column of the given text, split like TextView does (plain spans, a Bionic <strong>, a highlight <mark>). */
 function article(length = 11) {
@@ -137,5 +137,39 @@ describe('topOffset', () => {
       segment.getBoundingClientRect = () => ({ bottom: 0 }) as DOMRect;
     });
     expect(topOffset(scroller, root)).toBeNull();
+  });
+});
+
+describe('selectText', () => {
+  afterEach(() => window.getSelection()?.removeAllRanges());
+
+  it('selects exactly those characters, across Bionic and highlight markup', () => {
+    const root = article();
+    expect(selectText(root, 2, 7)).toBe(true);
+    expect(window.getSelection()?.toString()).toBe('llo wor');
+  });
+
+  it('can select up to the very end of the text', () => {
+    const root = article();
+    expect(selectText(root, 6, 5)).toBe(true);
+    expect(window.getSelection()?.toString()).toBe('world');
+  });
+
+  it('replaces an earlier selection', () => {
+    const root = article();
+    selectText(root, 0, 3);
+    selectText(root, 6, 3);
+    expect(window.getSelection()?.rangeCount).toBe(1);
+    expect(window.getSelection()?.toString()).toBe('wor');
+  });
+
+  it('refuses a range outside the text and leaves the selection as it was', () => {
+    const root = article();
+    selectText(root, 0, 3);
+    expect(selectText(root, 9, 5)).toBe(false);
+    expect(selectText(root, -1, 3)).toBe(false);
+    expect(selectText(root, 3, 0)).toBe(false);
+    expect(selectText(root, Number.NaN, 3)).toBe(false);
+    expect(window.getSelection()?.toString()).toBe('hel');
   });
 });

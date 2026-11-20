@@ -15,7 +15,8 @@ import { PdfViewer } from '../pdf/PdfViewer';
 import type { PdfProgress, PdfViewerHandle } from '../pdf/PdfViewer';
 import { PsdInspector } from '../psd/PsdInspector';
 import { TextView } from './TextView';
-import { TEXT_TOP_MARGIN, rectAtOffset, topOffset } from './textPosition';
+import { TEXT_TOP_MARGIN, rectAtOffset, selectText, topOffset } from './textPosition';
+import type { MatchTarget } from '../search/searchCommands';
 import { ReflowView, reflowPageAt, scrollToReflowPage } from './ReflowView';
 import { useReflowText } from './useReflowText';
 import type { ReflowState } from './useReflowText';
@@ -50,6 +51,11 @@ export interface ReaderHandle {
   goToHighlight(start: number): void;
   /** Scrolls a text document so the character at `offset` sits just under the status line. */
   goToOffset(offset: number): void;
+  /**
+   * Takes the reader to a search match in whichever view is showing: the page for a PDF in Pages, otherwise
+   * the match is scrolled to just under the status line and selected.
+   */
+  goToMatch(target: MatchTarget): void;
 }
 
 export interface ReaderCanvasProps {
@@ -304,6 +310,19 @@ export function ReaderCanvas({ doc, highlights, onHighlight, onText, onPosition,
       const article = scroller?.querySelector('article');
       if (!scroller || !article || text === null || !Number.isFinite(offset) || offset < 0 || offset > text.length) return;
       const rect = rectAtOffset(article, Math.floor(offset));
+      if (rect) scroller.scrollTop += rect.top - scroller.getBoundingClientRect().top - TEXT_TOP_MARGIN;
+    },
+    goToMatch(target: MatchTarget) {
+      if (target.kind === 'page' || (target.kind === 'reflow' && !reflowDoc)) {
+        goToPage(target.page);
+        return;
+      }
+      const scroller = scrollRef.current;
+      if (!scroller || (target.kind === 'text' && text === null)) return;
+      const article = scroller.querySelector<HTMLElement>(target.kind === 'text' ? 'article' : `section[data-page="${target.page}"] article`);
+      // Selecting validates the range, so a match outside the text moves nothing.
+      if (!article || !selectText(article, target.offset, target.length)) return;
+      const rect = rectAtOffset(article, Math.floor(target.offset));
       if (rect) scroller.scrollTop += rect.top - scroller.getBoundingClientRect().top - TEXT_TOP_MARGIN;
     },
     goToHighlight(start: number) {
