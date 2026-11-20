@@ -66,6 +66,15 @@ export function snippetAround(text: string, offset: number, length: number, radi
   let end = Math.min(text.length, offset + length + radius);
   if (start > 0 && isLowSurrogate(text.charCodeAt(start))) start += 1;
   if (end < text.length && isHighSurrogate(text.charCodeAt(end - 1))) end -= 1;
+  // Do not cut a word in half: pull a cut end in to the nearest space, when there is one before the match.
+  if (start > 0 && !/\s/.test(text[start - 1]) && !/\s/.test(text[start])) {
+    const gap = text.slice(start, offset).search(/\s/);
+    if (gap >= 0) start += gap + 1;
+  }
+  if (end < text.length && !/\s/.test(text[end - 1]) && !/\s/.test(text[end])) {
+    const gap = text.slice(offset + length, end).search(/\s\S*$/);
+    if (gap >= 0) end = offset + length + gap;
+  }
   const clean = (part: string) => part.replace(/\s+/g, ' ');
   const cutBefore = text.slice(0, start).trim() !== '';
   const cutAfter = text.slice(end).trim() !== '';

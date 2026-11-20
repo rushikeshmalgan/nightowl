@@ -124,6 +124,22 @@ describe('snippetAround', () => {
     expect(snippetAround(far, far.indexOf('NEEDLE'), 6).endsWith('…')).toBe(false);
   });
 
+  it('does not cut a word in half at either end', () => {
+    const text = `${'abcdefghij '.repeat(12)}NEEDLE${' klmnopqrst'.repeat(12)}`;
+    const snippet = snippetAround(text, text.indexOf('NEEDLE'), 6);
+    const words = snippet.replace(/…/g, '').split(' ');
+    expect(words).toContain('NEEDLE');
+    for (const word of words) expect(['abcdefghij', 'NEEDLE', 'klmnopqrst']).toContain(word);
+    expect(snippet.startsWith('…abcdefghij')).toBe(true);
+    expect(snippet.endsWith('klmnopqrst…')).toBe(true);
+  });
+
+  it('keeps a match that is inside a longer word, with that word cut where it must be', () => {
+    const text = `${'a '.repeat(30)}midnightblue${' b'.repeat(30)}`;
+    const snippet = snippetAround(text, text.indexOf('night'), 5);
+    expect(snippet).toContain('midnightblue');
+  });
+
   it('collapses whitespace, line breaks included', () => {
     expect(snippetAround('first\n\n  needle\t\tlast', 9, 6)).toBe('first needle last');
   });
